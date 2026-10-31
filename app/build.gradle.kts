@@ -8,8 +8,8 @@ android {
         applicationId = "tw.dietbook"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
     signingConfigs {
         if (ksProps.isNotEmpty()) create("release") {
@@ -51,6 +51,8 @@ dependencies {
     implementation("androidx.camera:camera-view:$cx")
     implementation("com.google.guava:guava:33.3.1-android")
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("androidx.health.connect:connect-client:1.1.0-alpha11")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")

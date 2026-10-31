@@ -1,0 +1,7 @@
+{
+  "tfnd": "bundled",
+  "trace": "bundled-v1",
+  "traceItems": 10777,
+  "traceBarcodes": 0,
+  "note": "TFDA dataset 33575 has no EAN field; barcodes map filled on update if available"
+}

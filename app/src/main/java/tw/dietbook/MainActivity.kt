@@ -154,8 +154,9 @@ class MainActivity : AppCompatActivity() {
             }
             actions.addView(it)
         }
-        chip("自訂／掃標示") { startActivity(Intent(this, CustomFoodActivity::class.java)) }
-        chip("熱量帳戶") { startActivity(Intent(this, BalanceActivity::class.java)) }
+        chip("掃條碼") { startActivity(Intent(this, BarcodeScanActivity::class.java)) }
+        chip("自訂／標示") { startActivity(Intent(this, CustomFoodActivity::class.java)) }
+        chip("帳戶") { startActivity(Intent(this, BalanceActivity::class.java)) }
         chip("設定") { startActivity(Intent(this, SettingsActivity::class.java)) }
         body.addView(actions)
 

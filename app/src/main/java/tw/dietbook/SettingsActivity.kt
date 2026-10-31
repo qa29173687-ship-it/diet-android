@@ -8,13 +8,16 @@ import android.widget.ArrayAdapter
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.Spinner
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SettingsActivity : AppCompatActivity() {
     private val hcPerms = registerForActivityResult(
@@ -37,7 +40,7 @@ class SettingsActivity : AppCompatActivity() {
         val (root, body) = col(this)
         setContentView(root)
         EdgeInsets.pad(root, ime = true)
-        body.addView(titleBar(this, "設定", "BMR／目標／Health Connect", onBack = { finish() }))
+        body.addView(titleBar(this, "設定", "BMR／目標／資料更新", onBack = { finish() }))
 
         body.addView(label(this, "性別"))
         val sexGroup = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
@@ -102,6 +105,42 @@ class SettingsActivity : AppCompatActivity() {
         remindGroup.addView(RadioButton(this).apply { text = "關閉提醒"; id = 2; setTextColor(C.text); isChecked = !u0.remindPayback })
         body.addView(label(this, "熱量帳戶提醒")); body.addView(remindGroup)
 
+        // ---- 資料版本 ----
+        body.addView(label(this, "營養資料庫", 15f, C.text).apply {
+            setPadding(0, dp(16f), 0, dp(6f)); paint.isFakeBoldText = true
+        })
+        val dataInfo = TextView(this).apply {
+            setTextColor(C.muted); textSize = 13f
+            setPadding(0, 0, 0, dp(8f))
+        }
+        fun refreshDataInfo() {
+            val n = try { TraceIndex.size(this@SettingsActivity) } catch (_: Exception) { 0 }
+            val bc = try { TraceIndex.barcodeCount(this@SettingsActivity) } catch (_: Exception) { 0 }
+            dataInfo.text = buildString {
+                append("TFND 版本：").append(Store.dataTfndVersion(this@SettingsActivity)).append('\n')
+                append("追溯索引版本：").append(Store.dataTraceVersion(this@SettingsActivity))
+                append("（約 $n 筆有營養")
+                if (bc > 0) append("、$bc 條碼")
+                append("）\n")
+                append("上次檢查：").append(DataUpdater.formatChecked(Store.dataLastChecked(this@SettingsActivity))).append('\n')
+                append("上次更新：").append(DataUpdater.formatChecked(Store.dataLastUpdated(this@SettingsActivity))).append('\n')
+                append("背景每日以 SHA-256 比對食藥署 export；無新檔則沿用本機／內建。")
+            }
+        }
+        refreshDataInfo()
+        body.addView(dataInfo)
+        body.addView(secondaryBtn(this, "立即檢查資料更新") {
+            Toast.makeText(this, "檢查中…（需網路）", Toast.LENGTH_SHORT).show()
+            lifecycleScope.launch {
+                val r = withContext(Dispatchers.IO) {
+                    try { DataUpdater.checkAndUpdate(this@SettingsActivity) }
+                    catch (e: Exception) { DataUpdater.Result(false, e.message ?: "失敗") }
+                }
+                refreshDataInfo()
+                Toast.makeText(this@SettingsActivity, r.message, Toast.LENGTH_LONG).show()
+            }
+        })
+
         body.addView(primaryBtn(this, "儲存設定") {
             val sex = if (sexGroup.checkedRadioButtonId == 2) "female" else "male"
             val a = age.text.toString().toIntOrNull() ?: u0.age
@@ -131,6 +170,6 @@ class SettingsActivity : AppCompatActivity() {
             finish()
         })
 
-        body.addView(label(this, Tfnd.ATTRIBUTION + "\n熱量帳戶與體脂換算僅供估算，非醫療建議。", 11f))
+        body.addView(label(this, Tfnd.ATTRIBUTION + "\n" + TraceIndex.ATTRIBUTION + "\n熱量帳戶與體脂換算僅供估算，非醫療建議。", 11f))
     }
 }

@@ -53,7 +53,15 @@ class PreviewTest {
                 id = "custom:preview", name = "7-11 御飯糰（範例）", category = "自訂",
                 kcalPer100 = 180.0, proteinPer100 = 5.5, custom = true,
                 servingG = 110.0, servingsPerPack = 1.0, basis = "per100",
+                barcode = "4710123456789",
             )
+        )
+        Store.setDataMeta(
+            c,
+            tfndVer = "bundled",
+            traceVer = "bundled-v1",
+            lastChecked = System.currentTimeMillis() - 3600_000,
+            lastUpdated = 0L,
         )
         val day = Days.today()
         Store.saveLogs(
@@ -71,7 +79,6 @@ class PreviewTest {
         val c = RuntimeEnvironment.getApplication()
         val main = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         ShadowLooper.idleMainLooper()
-        // wait for coroutine refresh
         Thread.sleep(200)
         ShadowLooper.idleMainLooper()
         shot(main, "1-主畫面")
@@ -98,5 +105,22 @@ class PreviewTest {
             Intent(c, LogActivity::class.java).putExtra("foodId", "custom:preview"),
         ).setup().get()
         shot(log, "7-記錄份量")
+
+        val confirm = Robolectric.buildActivity(
+            CustomFoodActivity::class.java,
+            Intent(c, CustomFoodActivity::class.java)
+                .putExtra("confirmBarcode", true)
+                .putExtra("barcode", "3017620422003")
+                .putExtra("prefillName", "Nutella")
+                .putExtra("prefillSource", "Open Food Facts")
+                .putExtra("basis", "per100")
+                .putExtra("kcalPer100", 539.0)
+                .putExtra("proteinPer100", 6.3)
+                .putExtra("note", "來源：Open Food Facts"),
+        ).setup().get()
+        shot(confirm, "8-條碼確認")
+
+        val barcode = Robolectric.buildActivity(BarcodeScanActivity::class.java).setup().get()
+        shot(barcode, "9-掃條碼")
     }
 }

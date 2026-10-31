@@ -1,6 +1,6 @@
 package tw.dietbook
 
-/** 食藥署 TFND 或自訂食物 */
+/** 食藥署 TFND、追溯系統或自訂食物 */
 data class FoodItem(
     val id: String,
     val name: String,
@@ -13,6 +13,7 @@ data class FoodItem(
     val servingsPerPack: Double? = null,   // 本包裝含幾份
     val basis: String = "per100",          // per100 | perServing
     val note: String = "",
+    val barcode: String = "",              // EAN／UPC；自訂食物可綁定供下次掃描命中
 )
 
 data class FoodLog(
@@ -55,4 +56,20 @@ data class UserProfile(
     val remindPayback: Boolean = false,
     val paybackDays: Int = 7,
     val hcEnabled: Boolean = true,
+)
+
+/** 條碼查詢命中（供確認／編輯畫面預填） */
+data class BarcodeHit(
+    val barcode: String,
+    val source: String,            // local | tfda | off
+    val sourceLabel: String,
+    val name: String,
+    val kcalPer100: Double?,
+    val proteinPer100: Double?,
+    val kcalPerServing: Double? = null,
+    val proteinPerServing: Double? = null,
+    val servingG: Double? = null,
+    val servingsPerPack: Double? = null,
+    val basis: String = "per100",
+    val note: String = "",
 )

@@ -68,6 +68,7 @@ object Store {
                     servingsPerPack = o.optDouble("servingsPerPack").takeIf { o.has("servingsPerPack") && !o.isNull("servingsPerPack") },
                     basis = o.optString("basis", "per100"),
                     note = o.optString("note"),
+                    barcode = o.optString("barcode"),
                 )
             )
         }
@@ -81,6 +82,7 @@ object Store {
                 put("id", f.id); put("name", f.name); put("alias", f.alias)
                 put("category", f.category); put("kcalPer100", f.kcalPer100)
                 put("proteinPer100", f.proteinPer100); put("basis", f.basis); put("note", f.note)
+                put("barcode", f.barcode)
                 if (f.servingG != null) put("servingG", f.servingG) else put("servingG", JSONObject.NULL)
                 if (f.servingsPerPack != null) put("servingsPerPack", f.servingsPerPack) else put("servingsPerPack", JSONObject.NULL)
             })
@@ -92,15 +94,29 @@ object Store {
         val list = customFoods(ctx)
         val i = list.indexOfFirst { it.id == food.id }
         if (i >= 0) list[i] = food else list.add(0, food)
-        saveCustomFoods(ctx, list)
+        // 同一條碼只保留最新一筆綁定
+        if (food.barcode.isNotBlank()) {
+            val bc = food.barcode
+            val cleaned = list.map { if (it.id != food.id && it.barcode == bc) it.copy(barcode = "") else it }
+            saveCustomFoods(ctx, cleaned)
+        } else {
+            saveCustomFoods(ctx, list)
+        }
     }
 
     fun deleteCustom(ctx: Context, id: String) {
         saveCustomFoods(ctx, customFoods(ctx).filter { it.id != id })
     }
 
+    fun findByBarcode(ctx: Context, barcode: String): FoodItem? {
+        val bc = barcode.trim()
+        if (bc.isEmpty()) return null
+        return customFoods(ctx).find { it.barcode == bc }
+    }
+
     fun findFood(ctx: Context, id: String): FoodItem? {
         customFoods(ctx).find { it.id == id }?.let { return it }
+        TraceIndex.findById(ctx, id)?.let { return it }
         return Tfnd.all(ctx).find { it.id == id }
     }
 
@@ -182,5 +198,39 @@ object Store {
             put("finalized", s.finalized)
         }
         p(ctx).edit().putString("snap_${s.day}", o.toString()).apply()
+    }
+
+    // ---- data update meta ----
+    fun dataTfndVersion(ctx: Context): String =
+        p(ctx).getString("data_tfnd_ver", "bundled") ?: "bundled"
+
+    fun dataTraceVersion(ctx: Context): String =
+        p(ctx).getString("data_trace_ver", "bundled-v1") ?: "bundled-v1"
+
+    fun dataLastChecked(ctx: Context): Long = p(ctx).getLong("data_last_checked", 0L)
+
+    fun dataLastUpdated(ctx: Context): Long = p(ctx).getLong("data_last_updated", 0L)
+
+    fun dataTfndHash(ctx: Context): String = p(ctx).getString("data_tfnd_hash", "") ?: ""
+
+    fun dataTraceHash(ctx: Context): String = p(ctx).getString("data_trace_hash", "") ?: ""
+
+    fun setDataMeta(
+        ctx: Context,
+        tfndVer: String? = null,
+        traceVer: String? = null,
+        tfndHash: String? = null,
+        traceHash: String? = null,
+        lastChecked: Long? = null,
+        lastUpdated: Long? = null,
+    ) {
+        val e = p(ctx).edit()
+        tfndVer?.let { e.putString("data_tfnd_ver", it) }
+        traceVer?.let { e.putString("data_trace_ver", it) }
+        tfndHash?.let { e.putString("data_tfnd_hash", it) }
+        traceHash?.let { e.putString("data_trace_hash", it) }
+        lastChecked?.let { e.putLong("data_last_checked", it) }
+        lastUpdated?.let { e.putLong("data_last_updated", it) }
+        e.apply()
     }
 }

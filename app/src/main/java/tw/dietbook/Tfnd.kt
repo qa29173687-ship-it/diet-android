@@ -2,6 +2,9 @@ package tw.dietbook
 
 import android.content.Context
 import java.io.BufferedReader
+import java.io.File
+import java.io.FileInputStream
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.util.Locale
@@ -12,12 +15,16 @@ object Tfnd {
 
     @Volatile private var cache: List<FoodItem>? = null
 
+    fun invalidate() { cache = null }
+
+    fun updatedFile(ctx: Context): File = File(TraceIndex.dir(ctx), "tfnd.csv")
+
     fun all(ctx: Context): List<FoodItem> {
         cache?.let { return it }
         synchronized(this) {
             cache?.let { return it }
             val list = ArrayList<FoodItem>(2400)
-            ctx.assets.open("tfnd.csv").use { inp ->
+            openCsv(ctx).use { inp ->
                 BufferedReader(InputStreamReader(inp, StandardCharsets.UTF_8)).useLines { lines ->
                     lines.drop(1).forEach { line ->
                         val c = parseCsv(line)
@@ -44,6 +51,12 @@ object Tfnd {
         }
     }
 
+    private fun openCsv(ctx: Context): InputStream {
+        val f = updatedFile(ctx)
+        return if (f.exists() && f.length() > 100) FileInputStream(f)
+        else ctx.assets.open("tfnd.csv")
+    }
+
     fun search(ctx: Context, q: String, custom: List<FoodItem>, limit: Int = 60): List<FoodItem> {
         val query = q.trim().lowercase(Locale.ROOT)
         if (query.isEmpty()) {
@@ -61,7 +74,6 @@ object Tfnd {
             else if (alias.contains(query)) score = 40 + alias.indexOf(query).coerceAtMost(20)
             else if (cat.contains(query)) score = 80
             else {
-                // fuzzy: all chars of query appear in order
                 if (subseq(name, query) || subseq(alias, query)) score = 60
             }
             if (score < Int.MAX_VALUE) {
@@ -70,6 +82,8 @@ object Tfnd {
             }
         }
         custom.forEach(::consider)
+        // 追溯系統名稱命中（離線）
+        TraceIndex.search(ctx, q, 15).forEach(::consider)
         all(ctx).forEach(::consider)
         return scored.sortedWith(compareBy({ it.first }, { it.second.name.length }))
             .asSequence().map { it.second }.distinctBy { it.id }.take(limit).toList()
