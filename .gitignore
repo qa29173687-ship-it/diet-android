@@ -1,0 +1,12 @@
+.gradle/
+build/
+app/build/
+local.properties
+keystore/
+*.jks
+*.keystore
+keystore.properties
+.idea/
+DietBook-*.apk
+*.iml
+.DS_Store
