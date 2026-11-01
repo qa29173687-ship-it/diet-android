@@ -61,11 +61,18 @@ class LogicTest {
     }
 
     @Test fun pigStages() {
+        // 餘額門檻：>1500 fat3、>1000 fat2、>500 fat1、|bal|≤500 normal、< -500 slim1、< -1000 slim2
+        // 畫面 v2.3.1 一律用 normal 貼圖，但 stage 文案邏輯仍保留
+        assertEquals(BodyStage.FAT3, PigSprites.fromBalance(5000.0))
+        assertEquals(BodyStage.FAT2, PigSprites.fromBalance(1500.0))
+        assertEquals(BodyStage.FAT1, PigSprites.fromBalance(800.0))
+        assertEquals(BodyStage.NORMAL, PigSprites.fromBalance(0.0))
+        assertEquals(BodyStage.SLIM1, PigSprites.fromBalance(-800.0))
+        assertEquals(BodyStage.SLIM2, PigSprites.fromBalance(-1500.0))
         assertEquals(PigMascotView.Stage.VERY_FAT, PigMascotView.stageFor(PigMascotView.scoreFor(5000.0)))
-        assertEquals(PigMascotView.Stage.CHUBBY, PigMascotView.stageFor(PigMascotView.scoreFor(1500.0)))
         assertEquals(PigMascotView.Stage.NORMAL, PigMascotView.stageFor(PigMascotView.scoreFor(0.0)))
-        assertEquals(PigMascotView.Stage.FIT, PigMascotView.stageFor(PigMascotView.scoreFor(-1500.0)))
         assertEquals(PigMascotView.Stage.BUFF, PigMascotView.stageFor(PigMascotView.scoreFor(-5000.0)))
+        assertEquals(PigMascotView.Stage.FIT, PigMascotView.stageFor(PigMascotView.scoreFor(-800.0)))
     }
 
     @Test fun praisePoolsNonEmpty() {

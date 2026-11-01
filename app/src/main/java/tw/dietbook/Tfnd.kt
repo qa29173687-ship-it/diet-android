@@ -60,10 +60,14 @@ object Tfnd {
     fun search(ctx: Context, q: String, custom: List<FoodItem>, limit: Int = 60): List<FoodItem> {
         val query = q.trim().lowercase(Locale.ROOT)
         if (query.isEmpty()) {
-            return custom.take(20) + all(ctx).take(40)
+            // 空搜尋優先常見份量表，方便直接點「地瓜一顆」
+            val common = Portions.search(ctx, "", 40).map { it.toFoodItem() }
+            return (custom.take(10) + common + all(ctx).take(20))
+                .distinctBy { it.id }
+                .take(limit)
         }
         val scored = ArrayList<Pair<Int, FoodItem>>(128)
-        fun consider(f: FoodItem) {
+        fun consider(f: FoodItem, boost: Int = 0) {
             val name = f.name.lowercase(Locale.ROOT)
             val alias = f.alias.lowercase(Locale.ROOT)
             val cat = f.category.lowercase(Locale.ROOT)
@@ -78,13 +82,16 @@ object Tfnd {
             }
             if (score < Int.MAX_VALUE) {
                 if (f.custom) score -= 5
+                score += boost
                 scored.add(score to f)
             }
         }
-        custom.forEach(::consider)
+        // 常見份量（含俗名：地瓜／番薯…）優先
+        Portions.search(ctx, q, 40).forEach { consider(it.toFoodItem(), boost = -20) }
+        custom.forEach { consider(it) }
         // 追溯系統名稱命中（離線）
-        TraceIndex.search(ctx, q, 15).forEach(::consider)
-        all(ctx).forEach(::consider)
+        TraceIndex.search(ctx, q, 15).forEach { consider(it) }
+        all(ctx).forEach { consider(it) }
         return scored.sortedWith(compareBy({ it.first }, { it.second.name.length }))
             .asSequence().map { it.second }.distinctBy { it.id }.take(limit).toList()
     }

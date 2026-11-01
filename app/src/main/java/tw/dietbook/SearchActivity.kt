@@ -26,7 +26,7 @@ class SearchActivity : AppCompatActivity() {
         setContentView(root)
         EdgeInsets.pad(root, ime = true)
         body.addView(titleBar(this, "搜尋食物", "食藥署＋追溯＋自訂", onBack = { finish() }))
-        val q = field(this, "輸入名稱或俗名，例如：雞蛋、白米")
+        val q = field(this, "輸入名稱或俗名，例如：地瓜、雞蛋、白飯")
         body.addView(q)
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         fun chip(t: String, act: () -> Unit) = secondaryBtn(this, t, act).also {
@@ -84,11 +84,16 @@ class SearchActivity : AppCompatActivity() {
                 }
                 setTextColor(C.text); textSize = 16f; paint.isFakeBoldText = true
             })
+            val portion = Portions.findForFood(this, f)
             val sub = buildString {
                 if (f.category.isNotBlank()) append(f.category).append("　")
                 append("${Calc.r0(f.kcalPer100)} kcal／100g　蛋白 ${Calc.r1(f.proteinPer100)} g")
+                portion?.units?.firstOrNull { it.unit != "公克" }?.let { u ->
+                    val k = Calc.scale(f.kcalPer100, u.grams)
+                    append("\n1${u.unit}≈${Calc.r0(u.grams)}g　約 ${Calc.r0(k)} kcal")
+                }
                 if (f.barcode.isNotBlank()) append("\n條碼：").append(f.barcode)
-                if (f.alias.isNotBlank()) append("\n俗名：").append(f.alias.take(40))
+                if (f.alias.isNotBlank()) append("\n俗名：").append(f.alias.take(48))
             }
             row.addView(label(this, sub, 12f))
             row.setOnClickListener {
@@ -101,6 +106,6 @@ class SearchActivity : AppCompatActivity() {
             }
             results.addView(row)
         }
-        results.addView(label(this, Tfnd.ATTRIBUTION + "\n" + TraceIndex.ATTRIBUTION, 11f))
+        results.addView(label(this, Tfnd.ATTRIBUTION + "\n" + TraceIndex.ATTRIBUTION + "\n" + Portions.ATTRIBUTION, 11f))
     }
 }

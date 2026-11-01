@@ -6,10 +6,11 @@ import android.graphics.BitmapFactory
 
 /**
  * 體型階段與 WebP 貼圖載入（assets/pig/<stage>/…）。
- * 餘額（累計熱量）規則：
+ * 餘額（累計熱量）規則仍計算 stage（供文案／日後胖瘦）：
  *  surplus >1500 fat3 · >1000 fat2 · >500 fat1
  *  |bal|≤500 normal（理想）
- *  deficit >500 slim1 · >1000 slim2（太瘦）
+ *  deficit >500 slim1 · >1000 slim2
+ * v2.3.1：畫面一律使用 normal 可愛版；胖瘦立繪之後再加。
  */
 enum class BodyStage(val dir: String, val caption: String, val hint: String) {
     SLIM2("slim2", "小豬太瘦了", "吃太少了喔，溫柔地多補一點營養吧～"),
@@ -60,9 +61,11 @@ object PigSprites {
     }
 
     fun get(ctx: Context, stage: BodyStage, frame: String): Bitmap {
-        val key = "${stage.dir}/$frame"
+        // 暫不顯示胖瘦差異：所有體型共用 normal 可愛貼圖
+        val art = BodyStage.NORMAL
+        val key = "${art.dir}/$frame"
         cache[key]?.let { return it }
-        val path = "pig/${stage.dir}/$frame.webp"
+        val path = "pig/${art.dir}/$frame.webp"
         val bm = try {
             ctx.assets.open(path).use { BitmapFactory.decodeStream(it) }
         } catch (_: Exception) {
