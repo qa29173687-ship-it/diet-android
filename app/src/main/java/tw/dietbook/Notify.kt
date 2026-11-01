@@ -101,9 +101,10 @@ object Notify {
     fun showPayback(ctx: Context) {
         ensureChannel(ctx)
         val u = Store.profile(ctx)
-        if (!u.remindPayback || u.balance <= 0) return
-        val per = Calc.paybackPerDay(u.balance, u.paybackDays.coerceAtLeast(1))
-        val text = "累計盈餘 ${Calc.r0(u.balance)} kcal（約 ${"%.2f".format(Calc.fatKg(u.balance))} kg）。" +
+        if (!u.remindPayback || u.balance >= 0) return
+        val debt = -u.balance
+        val per = Calc.paybackPerDay(debt, u.paybackDays.coerceAtLeast(1))
+        val text = "累計進帳 ${Calc.r0(debt)} kcal（約 ${"%.2f".format(Calc.fatKg(debt))} kg）。" +
             "若 ${u.paybackDays} 天打平，每天約需再少 ${Calc.r0(per)} kcal。此為估算。"
         val open = PendingIntent.getActivity(
             ctx, 0, Intent(ctx, MainActivity::class.java),

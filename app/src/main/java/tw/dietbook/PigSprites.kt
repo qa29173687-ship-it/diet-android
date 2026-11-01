@@ -51,12 +51,13 @@ object PigSprites {
 
     private val cache = HashMap<String, Bitmap>()
 
+    /** Negative balance (surplus eaten) → fatter; positive (deficit) → slimmer. Art still normal. */
     fun fromBalance(balance: Double): BodyStage = when {
-        balance > 1500 -> BodyStage.FAT3
-        balance > 1000 -> BodyStage.FAT2
-        balance > 500 -> BodyStage.FAT1
-        balance < -1000 -> BodyStage.SLIM2
-        balance < -500 -> BodyStage.SLIM1
+        balance < -1500 -> BodyStage.FAT3
+        balance < -1000 -> BodyStage.FAT2
+        balance < -500 -> BodyStage.FAT1
+        balance > 1000 -> BodyStage.SLIM2
+        balance > 500 -> BodyStage.SLIM1
         else -> BodyStage.NORMAL
     }
 

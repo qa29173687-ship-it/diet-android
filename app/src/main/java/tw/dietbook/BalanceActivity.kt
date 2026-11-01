@@ -38,7 +38,7 @@ class BalanceActivity : AppCompatActivity() {
         val (headline, amount) = BankCopy.headline(u.balance)
         bal.addView(label(this, headline, 12f))
         bal.addView(value(this, amount, 34f, BankCopy.color(u.balance)))
-        bal.addView(label(this, "約 ${"%.2f".format(Calc.fatKg(u.balance))} kg 體脂肪等價（7700 kcal ≈ 1 kg）"))
+        bal.addView(label(this, "約 ${"%.2f".format(Calc.fatKg(kotlin.math.abs(u.balance)))} kg 體脂肪等價（7700 kcal ≈ 1 kg；正＝缺口、負＝進帳）"))
         bal.addView(label(this, BankCopy.tip(u.balance), 13f, C.text))
         bal.addView(label(this, "說明：進帳＝吃超過消耗（小豬變圓）；存款／缺口＝吃少於消耗（小豬變壯）。粗估而已，個體差很大。", 12f, C.muted))
         body.addView(bal)
@@ -52,15 +52,17 @@ class BalanceActivity : AppCompatActivity() {
         val today = card(this)
         today.addView(label(this, "今日尚未入帳的淨值（跨日才定案）", 12f))
         val todayTxt = when {
-            snap.net > 0 -> "進帳 +${Calc.r0(snap.net)} kcal"
-            snap.net < 0 -> "存款 +${Calc.r0(-snap.net)} kcal"
+            snap.net > 0 -> "存款 +${Calc.r0(snap.net)} kcal"
+            snap.net < 0 -> "進帳 −${Calc.r0(-snap.net)} kcal"
             else -> "打平 0 kcal"
         }
         today.addView(value(this, todayTxt, 24f, BankCopy.color(snap.net)))
         val burnTxt = when (snap.burnSource) {
             "manual" -> "手動活動 ${Calc.r0(snap.manualBurn)}"
             "health_connect" -> "HC 活動 ${Calc.r0(snap.activeBurn ?: 0.0)}"
-            else -> if (snap.activeBurn != null) "活動 ${Calc.r0(snap.activeBurn)}" else "TDEE ${Calc.r0(snap.tdeeFallback)}"
+            "bmr_only" -> "今日僅 BMR 存款（無運動）"
+            "hc_ignored" -> "HC 已忽略"
+            else -> if (snap.activeBurn != null) "活動 ${Calc.r0(snap.activeBurn)}" else "僅 BMR"
         }
         today.addView(label(this, "攝取 ${Calc.r0(snap.intakeKcal)}、BMR ${Calc.r0(snap.bmr)}、$burnTxt"))
         body.addView(today)
@@ -91,7 +93,7 @@ class BalanceActivity : AppCompatActivity() {
         }
 
         body.addView(label(this, "手動調整餘額（校正用）", 13f))
-        val adj = field(this, "設為多少 kcal（可負數＝缺口）", Calc.r0(u.balance).toString())
+        val adj = field(this, "設為多少 kcal（正＝存款／缺口，負＝進帳）", Calc.r0(u.balance).toString())
         body.addView(adj)
         body.addView(secondaryBtn(this, "覆寫餘額") {
             val v = adj.text.toString().toDoubleOrNull()

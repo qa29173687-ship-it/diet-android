@@ -113,6 +113,7 @@ class SetupActivity : AppCompatActivity() {
                     bmr = manual, bmrManual = true,
                     activity = act, goalKcal = gk, goalProtein = gp,
                     lastFinalizedDay = Days.yesterdayOf(Days.today()),
+                    balanceStartDay = Days.today(),
                 )
             )
             Toast.makeText(this, "BMR ${Calc.r0(manual)} kcal／日已存進小豬撲滿", Toast.LENGTH_SHORT).show()

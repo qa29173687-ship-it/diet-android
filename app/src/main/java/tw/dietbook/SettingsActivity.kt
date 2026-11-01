@@ -169,6 +169,21 @@ class SettingsActivity : AppCompatActivity() {
             }
         })
 
+        body.addView(label(this, "總存款", 15f, C.text).apply {
+            setPadding(0, dp(16f), 0, dp(6f)); paint.isFakeBoldText = true
+        })
+        body.addView(label(this, "每天會自動存入一次 BMR；太久沒開 App 也會補登（可能堆很多）。重置只清總存款起算日，食物／運動紀錄會保留。", 12f, C.muted))
+        body.addView(secondaryBtn(this, "🐷 重置總存款") {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("真的要清空小豬撲滿嗎？")
+                .setMessage("從今天重新起算總存款（今天的 BMR 會再存一次）。\n食物、運動、鍛鍊紀錄都還在，小豬不會忘記你吃過什麼～\n\n這是危險操作喔，確定嗎？")
+                .setNegativeButton("再想想") { d, _ -> d.dismiss() }
+                .setPositiveButton("確定重置") { _, _ ->
+                    Balance.resetSavings(this)
+                    Toast.makeText(this, "已重置！今天開始重新存 BMR 🐷", Toast.LENGTH_LONG).show()
+                }
+                .show()
+        })
         body.addView(secondaryBtn(this, "🗑 紀錄明細（可刪除）") {
             startActivity(Intent(this, HistoryActivity::class.java))
         })

@@ -237,8 +237,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         val live = u.balance + snap.net
-        if (live < 0) {
-            val kg = kotlin.math.floor((-live) / 7700.0).toInt()
+        if (live > 0) {
+            val kg = kotlin.math.floor(live / 7700.0).toInt()
             val celebrated = Store.deficitKgCelebrated(this)
             if (kg > celebrated) {
                 for (i in (celebrated + 1)..kg) {

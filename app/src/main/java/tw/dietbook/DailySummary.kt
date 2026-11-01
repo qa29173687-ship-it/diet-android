@@ -55,14 +55,14 @@ object DailySummary {
     fun sampleBelowBmr(day: String = Days.yesterdayOf(Days.today())): DailySummaryModel {
         val intake = 980.0
         val bmr = 1320.0
-        val balance = -620.0
+        val balance = 620.0
         return DailySummaryModel(
             day = day,
             intakeKcal = 980,
             proteinG = 42,
             burnKcal = 180,
             strengthMin = 20,
-            netKcal = -520.0,
+            netKcal = 520.0, // BMR+burn−intake
             balanceKcal = balance,
             bmr = bmr,
             advice = DailyAdvice.of(intake, bmr, balance),

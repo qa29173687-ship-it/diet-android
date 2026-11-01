@@ -25,6 +25,7 @@ object Store {
             goalProtein = s.getFloat("goalProtein", 80f).toDouble(),
             balance = s.getFloat("balance", 0f).toDouble(),
             lastFinalizedDay = s.getString("lastFinalizedDay", "") ?: "",
+            balanceStartDay = s.getString("balanceStartDay", "") ?: "",
             remindPayback = s.getBoolean("remindPayback", false),
             paybackDays = s.getInt("paybackDays", 7),
             hcEnabled = s.getBoolean("hcEnabled", true),
@@ -48,6 +49,7 @@ object Store {
             .putFloat("goalProtein", u.goalProtein.toFloat())
             .putFloat("balance", u.balance.toFloat())
             .putString("lastFinalizedDay", u.lastFinalizedDay)
+            .putString("balanceStartDay", u.balanceStartDay)
             .putBoolean("remindPayback", u.remindPayback)
             .putInt("paybackDays", u.paybackDays)
             .putBoolean("hcEnabled", u.hcEnabled)

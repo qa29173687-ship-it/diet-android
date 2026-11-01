@@ -3,8 +3,7 @@ package tw.dietbook
 /**
  * 每日建議：目標是「每天維持健康熱量缺口，但攝取不要低於 BMR」。
  *
- * 帳戶語意：balance &lt; 0 = 缺口／存款；balance &gt; 0 = 熱量進帳（吃太多）。
- * 使用者說的「存款變負／要注意」對應進帳（surplus）。
+ * v2.4.4 帳戶語意：balance &gt; 0 = 缺口／存款；balance &lt; 0 = 熱量進帳（吃太多）。
  */
 enum class AdviceKind { BELOW_BMR, SURPLUS_CARE, PRAISE }
 
@@ -17,7 +16,7 @@ data class AdviceCard(
 object DailyAdvice {
     fun of(intakeKcal: Double, bmr: Double, balanceKcal: Double): AdviceCard = when {
         intakeKcal < bmr -> belowBmr(bmr)
-        balanceKcal > 0.0 -> surplusCare()
+        balanceKcal < 0.0 -> surplusCare()
         else -> praise()
     }
 

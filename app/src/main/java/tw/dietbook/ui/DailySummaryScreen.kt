@@ -53,8 +53,8 @@ fun DailySummaryScreen(
     val (headline, amount) = BankCopy.headline(model.balanceKcal)
     val balColor = Color(BankCopy.color(model.balanceKcal))
     val netTxt = when {
-        model.netKcal > 0 -> "進帳 +${Calc.r0(model.netKcal)} kcal"
-        model.netKcal < 0 -> "存款 +${Calc.r0(-model.netKcal)} kcal"
+        model.netKcal > 0 -> "存款 +${Calc.r0(model.netKcal)} kcal"
+        model.netKcal < 0 -> "進帳 −${Calc.r0(-model.netKcal)} kcal"
         else -> "打平 0 kcal"
     }
     Column(

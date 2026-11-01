@@ -29,11 +29,14 @@ object Calc {
     fun tdee(bmr: Double, level: String): Double = bmr * activityFactor(level)
 
     /**
-     * 攝取 − BMR − 活動消耗；無活動數據時用攝取 − TDEE。
-     * 活動消耗規則：有手動運動／鍛鍊時以手動為準；否則用 Health Connect；兩者皆無則 TDEE。
+     * 當日存款淨值（v2.4.4）：BMR + 活動消耗 − 攝取。
+     * 正數＝熱量缺口＝存款增加；負數＝吃超過消耗＝進帳。
+     * 無手動／HC 活動時 burn=0（不再用 TDEE 代替，避免把活動係數當成「運動存款」）。
+     * [tdeeFallback] 保留參數相容呼叫端，不參與計算。
      */
     fun dayNet(intake: Double, bmr: Double, activeBurn: Double?, tdeeFallback: Double): Double {
-        return if (activeBurn != null) intake - bmr - activeBurn else intake - tdeeFallback
+        val burn = activeBurn ?: 0.0
+        return BalanceMath.dayDelta(intake, bmr, burn)
     }
 
     /**

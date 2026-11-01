@@ -80,6 +80,8 @@ data class UserProfile(
     val goalProtein: Double = 80.0,
     val balance: Double = 0.0,
     val lastFinalizedDay: String = "",
+    /** Inclusive start of 總存款 window (setup or last reset). */
+    val balanceStartDay: String = "",
     val remindPayback: Boolean = false,
     val paybackDays: Int = 7,
     val hcEnabled: Boolean = true,

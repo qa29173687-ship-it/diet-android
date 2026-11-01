@@ -161,16 +161,16 @@ fun progress(ctx: Activity, pct: Int, color: Int = C.primary) = ProgressBar(ctx,
 
 /** Display helpers for piggy-bank balance language. */
 object BankCopy {
-    /** Surplus (進帳) → fat pig; deficit (存款／缺口) shown as positive. */
+    /** v2.4.4: positive = 存款／缺口; negative = 進帳（吃超）. */
     fun headline(balance: Double): Pair<String, String> = when {
-        balance > 50 -> "熱量進帳" to "+${Calc.r0(balance)} kcal"
-        balance < -50 -> "存款（熱量缺口）" to "+${Calc.r0(-balance)} kcal"
+        balance > 50 -> "存款（熱量缺口）" to "+${Calc.r0(balance)} kcal"
+        balance < -50 -> "熱量進帳" to "−${Calc.r0(-balance)} kcal"
         else -> "存錢筒剛好打平" to "${Calc.r0(balance)} kcal"
     }
 
     fun color(balance: Double): Int = when {
-        balance > 50 -> C.danger
-        balance < -50 -> C.mint
+        balance > 50 -> C.mint
+        balance < -50 -> C.danger
         else -> C.text
     }
 
