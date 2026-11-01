@@ -93,3 +93,17 @@ class LogicTest {
     }
 
 }
+
+    @Test fun dailyAdviceRules() {
+        // below BMR → harms
+        val a = DailyAdvice.of(intakeKcal = 900.0, bmr = 1320.0, balanceKcal = -500.0)
+        assertEquals(AdviceKind.BELOW_BMR, a.kind)
+        // above BMR + surplus (進帳) → soft health reminder
+        val b = DailyAdvice.of(intakeKcal = 1800.0, bmr = 1320.0, balanceKcal = 400.0)
+        assertEquals(AdviceKind.SURPLUS_CARE, b.kind)
+        // above BMR + deficit → praise
+        val c = DailyAdvice.of(intakeKcal = 1500.0, bmr = 1320.0, balanceKcal = -300.0)
+        assertEquals(AdviceKind.PRAISE, c.kind)
+        assertTrue(c.title.contains("很棒"))
+    }
+
