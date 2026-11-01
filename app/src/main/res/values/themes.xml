@@ -1,12 +1,13 @@
 <resources>
-    <style name="AppTheme" parent="Theme.Material3.Dark.NoActionBar">
-        <item name="colorPrimary">#3DDC97</item>
-        <item name="colorOnPrimary">#0A1A12</item>
-        <item name="colorSecondary">#3DDC97</item>
-        <item name="colorAccent">#3DDC97</item>
-        <item name="android:windowBackground">#0F1412</item>
+    <style name="AppTheme" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">#FF8FAB</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#7EC8A3</item>
+        <item name="colorAccent">#FF8FAB</item>
+        <item name="android:windowBackground">#FFF5F8</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 </resources>

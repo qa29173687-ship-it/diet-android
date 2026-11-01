@@ -42,4 +42,12 @@ class LogicTest {
         val c = Tfnd.parseCsv("""A01,"a,b",c""")
         assertEquals(listOf("A01", "a,b", "c"), c)
     }
+
+    @Test fun pigStages() {
+        assertEquals(PigMascotView.Stage.VERY_FAT, PigMascotView.stageFor(PigMascotView.scoreFor(5000.0)))
+        assertEquals(PigMascotView.Stage.CHUBBY, PigMascotView.stageFor(PigMascotView.scoreFor(1500.0)))
+        assertEquals(PigMascotView.Stage.NORMAL, PigMascotView.stageFor(PigMascotView.scoreFor(0.0)))
+        assertEquals(PigMascotView.Stage.FIT, PigMascotView.stageFor(PigMascotView.scoreFor(-1500.0)))
+        assertEquals(PigMascotView.Stage.BUFF, PigMascotView.stageFor(PigMascotView.scoreFor(-5000.0)))
+    }
 }

@@ -20,7 +20,7 @@ object Notify {
         if (Build.VERSION.SDK_INT >= 26) {
             val nm = ctx.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(
-                NotificationChannel(CH, "熱量帳戶提醒", NotificationManager.IMPORTANCE_DEFAULT)
+                NotificationChannel(CH, "存錢筒提醒", NotificationManager.IMPORTANCE_DEFAULT)
             )
         }
     }
@@ -60,7 +60,7 @@ object Notify {
         )
         val n = NotificationCompat.Builder(ctx, CH)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("飲食帳本・熱量帳戶")
+            .setContentTitle("熱量存錢筒・撲滿提醒")
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(open)

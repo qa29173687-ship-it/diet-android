@@ -16,24 +16,32 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
+/** Pastel pink 「熱量存錢筒」 palette — soft, cute, light. */
 object C {
-    const val bg = 0xFF0F1412.toInt()
-    const val card = 0xFF1A221E.toInt()
-    const val card2 = 0xFF222C27.toInt()
-    const val primary = 0xFF3DDC97.toInt()
-    const val primaryDark = 0xFF1B9E6A.toInt()
-    const val text = 0xFFF2F7F4.toInt()
-    const val muted = 0xFF9BB0A4.toInt()
-    const val danger = 0xFFFF6B6B.toInt()
-    const val warn = 0xFFFFC857.toInt()
-    const val line = 0xFF2A3831.toInt()
+    const val bg = 0xFFFFF5F8.toInt()
+    const val card = 0xFFFFFFFF.toInt()
+    const val card2 = 0xFFFFE8EF.toInt()
+    const val primary = 0xFFFF8FAB.toInt()
+    const val primaryDark = 0xFFE85A7A.toInt()
+    const val text = 0xFF4A3040.toInt()
+    const val muted = 0xFFB08A98.toInt()
+    const val danger = 0xFFFF6B8A.toInt()
+    const val warn = 0xFFFFB86C.toInt()
+    const val line = 0xFFFFD6E0.toInt()
+    const val mint = 0xFF7EC8A3.toInt()
+    const val onPrimary = 0xFFFFFFFF.toInt()
 }
 
 fun Activity.edge() {
     WindowCompat.setDecorFitsSystemWindows(window, false)
     window.statusBarColor = Color.TRANSPARENT
     window.navigationBarColor = Color.TRANSPARENT
+    WindowInsetsControllerCompat(window, window.decorView).apply {
+        isAppearanceLightStatusBars = true
+        isAppearanceLightNavigationBars = true
+    }
 }
 
 fun dp(v: View, n: Float): Int =
@@ -75,7 +83,7 @@ fun titleBar(ctx: Activity, title: String, subtitle: String? = null, onBack: (()
         bar.addView(Button(ctx).apply {
             text = "←"
             setTextColor(C.text)
-            background = roundBg(C.card2, 10f, this)
+            background = roundBg(C.card2, 14f, this)
             setOnClickListener { onBack() }
             layoutParams = LinearLayout.LayoutParams(ctx.dp(44f), ctx.dp(44f)).apply { marginEnd = ctx.dp(8f) }
         })
@@ -93,8 +101,11 @@ fun titleBar(ctx: Activity, title: String, subtitle: String? = null, onBack: (()
 
 fun card(ctx: Activity): LinearLayout = LinearLayout(ctx).apply {
     orientation = LinearLayout.VERTICAL
-    background = roundBg(C.card, 16f, this)
-    setPadding(ctx.dp(14f), ctx.dp(14f), ctx.dp(14f), ctx.dp(14f))
+    background = roundBg(C.card, 20f, this).also {
+        it.setStroke(ctx.dp(1f), C.line)
+    }
+    setPadding(ctx.dp(16f), ctx.dp(16f), ctx.dp(16f), ctx.dp(16f))
+    elevation = 2f
     val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     lp.bottomMargin = ctx.dp(12f)
     layoutParams = lp
@@ -110,11 +121,11 @@ fun value(ctx: Activity, s: String, size: Float = 28f, color: Int = C.text) = Te
 
 fun primaryBtn(ctx: Activity, s: String, onClick: () -> Unit) = Button(ctx).apply {
     text = s
-    setTextColor(0xFF0A1A12.toInt())
+    setTextColor(C.onPrimary)
     backgroundTintList = ColorStateList.valueOf(C.primary)
-    background = roundBg(C.primary, 12f, this)
+    background = roundBg(C.primary, 16f, this)
     setOnClickListener { onClick() }
-    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(48f)).apply {
+    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(50f)).apply {
         topMargin = ctx.dp(8f); bottomMargin = ctx.dp(4f)
     }
 }
@@ -122,7 +133,7 @@ fun primaryBtn(ctx: Activity, s: String, onClick: () -> Unit) = Button(ctx).appl
 fun secondaryBtn(ctx: Activity, s: String, onClick: () -> Unit) = Button(ctx).apply {
     text = s
     setTextColor(C.text)
-    background = roundBg(C.card2, 12f, this)
+    background = roundBg(C.card2, 16f, this)
     setOnClickListener { onClick() }
     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(48f)).apply {
         topMargin = ctx.dp(4f); bottomMargin = ctx.dp(4f)
@@ -132,8 +143,8 @@ fun secondaryBtn(ctx: Activity, s: String, onClick: () -> Unit) = Button(ctx).ap
 fun field(ctx: Activity, hint: String, value: String = ""): EditText = EditText(ctx).apply {
     setHint(hint); setText(value)
     setTextColor(C.text); setHintTextColor(C.muted)
-    setBackgroundColor(C.card2)
-    setPadding(ctx.dp(12f), ctx.dp(12f), ctx.dp(12f), ctx.dp(12f))
+    background = roundBg(C.card2, 14f, this)
+    setPadding(ctx.dp(14f), ctx.dp(14f), ctx.dp(14f), ctx.dp(14f))
     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
         bottomMargin = ctx.dp(8f)
     }
@@ -145,5 +156,27 @@ fun progress(ctx: Activity, pct: Int, color: Int = C.primary) = ProgressBar(ctx,
     progressBackgroundTintList = ColorStateList.valueOf(C.line)
     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(10f)).apply {
         topMargin = ctx.dp(6f); bottomMargin = ctx.dp(4f)
+    }
+}
+
+/** Display helpers for piggy-bank balance language. */
+object BankCopy {
+    /** Surplus (進帳) → fat pig; deficit (存款／缺口) shown as positive. */
+    fun headline(balance: Double): Pair<String, String> = when {
+        balance > 50 -> "熱量進帳" to "+${Calc.r0(balance)} kcal"
+        balance < -50 -> "存款（熱量缺口）" to "+${Calc.r0(-balance)} kcal"
+        else -> "存錢筒剛好打平" to "${Calc.r0(balance)} kcal"
+    }
+
+    fun color(balance: Double): Int = when {
+        balance > 50 -> C.danger
+        balance < -50 -> C.mint
+        else -> C.text
+    }
+
+    fun tip(balance: Double): String = when {
+        balance > 50 -> "小豬變圓圓的～多動一下或少吃一點，慢慢還款就好。"
+        balance < -50 -> "太棒了！缺口就是你的存款，小豬正在變壯 💪"
+        else -> "今天保持覺察，小豬會陪著你。"
     }
 }

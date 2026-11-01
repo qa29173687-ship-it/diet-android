@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -19,6 +20,7 @@ import kotlinx.coroutines.launch
 class MainActivity : AppCompatActivity() {
     private lateinit var body: LinearLayout
     private var healthMsg = ""
+    private var pig: PigMascotView? = null
 
     private val hcPerms = registerForActivityResult(
         PermissionController.createRequestPermissionResultContract()
@@ -90,61 +92,87 @@ class MainActivity : AppCompatActivity() {
 
     private fun render(u: UserProfile, snap: DaySnapshot) {
         body.removeAllViews()
-        body.addView(titleBar(this, "飲食帳本", Days.label(snap.day)) )
-        // Goals card
+        body.addView(titleBar(this, "熱量存錢筒", Days.label(snap.day)))
+
+        // —— Hero: pig + big balance ——
+        val hero = card(this)
+        hero.gravity = Gravity.CENTER_HORIZONTAL
+        val pigView = PigMascotView(this).also { pig = it }
+        pigView.layoutParams = LinearLayout.LayoutParams(dp(260f), dp(240f)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        // Include today's unsettled net so pig reacts live
+        val liveBalance = u.balance + snap.net
+        pigView.setBalance(liveBalance, animate = true)
+        hero.addView(pigView)
+
+        val (headline, amount) = BankCopy.headline(liveBalance)
+        hero.addView(label(this, headline, 14f, C.muted).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(4f), 0, 0)
+        })
+        hero.addView(value(this, amount, 36f, BankCopy.color(liveBalance)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+        })
+        hero.addView(label(this, BankCopy.tip(liveBalance), 13f, C.text).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(8f), dp(4f), dp(8f), 0)
+        })
+        hero.addView(label(this, "含今日尚未入帳淨值；點此看存摺與還款計畫", 11f, C.muted).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+        })
+        hero.setOnClickListener { startActivity(Intent(this, BalanceActivity::class.java)) }
+        body.addView(hero)
+
+        // —— Today intake ——
         val goal = card(this)
-        goal.addView(label(this, "今日攝取／目標", 12f))
+        goal.addView(label(this, "今日放進肚子裡的", 12f))
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            addView(value(this@MainActivity, "${Calc.r0(snap.intakeKcal)}", 26f, C.primary))
+            addView(value(this@MainActivity, "${Calc.r0(snap.intakeKcal)}", 24f, C.primary))
             addView(label(this@MainActivity, "／ ${Calc.r0(u.goalKcal)} kcal"))
             addView(progress(this@MainActivity, ((snap.intakeKcal / u.goalKcal.coerceAtLeast(1.0)) * 100).toInt()))
         })
         row.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            addView(value(this@MainActivity, "${Calc.r1(snap.protein)}", 26f, C.warn))
+            addView(value(this@MainActivity, "${Calc.r1(snap.protein)}", 24f, C.warn))
             addView(label(this@MainActivity, "／ ${Calc.r0(u.goalProtein)} g 蛋白"))
             addView(progress(this@MainActivity, ((snap.protein / u.goalProtein.coerceAtLeast(1.0)) * 100).toInt(), C.warn))
         })
         goal.addView(row)
         body.addView(goal)
 
-        // Net / HC card
+        // —— Today net ——
         val netCard = card(this)
-        val mode = if (snap.activeBurn != null) "攝取 − BMR − 活動消耗（Health Connect）"
-        else "攝取 − TDEE（活動量估算：${Calc.activityLabel(u.activity)}）"
-        netCard.addView(label(this, "今日淨值（將累加至帳戶）", 12f))
-        val netColor = if (snap.net > 0) C.danger else C.primary
-        netCard.addView(value(this, "${if (snap.net > 0) "+" else ""}${Calc.r0(snap.net)} kcal", 30f, netColor))
+        val mode = if (snap.activeBurn != null) "攝取 − BMR − 活動（Health Connect）"
+        else "攝取 − TDEE（${Calc.activityLabel(u.activity)}）"
+        netCard.addView(label(this, "今日淨值（明天會存進撲滿）", 12f))
+        val netColor = if (snap.net > 0) C.danger else if (snap.net < 0) C.mint else C.text
+        val netLabel = when {
+            snap.net > 0 -> "進帳 +${Calc.r0(snap.net)} kcal"
+            snap.net < 0 -> "存款 +${Calc.r0(-snap.net)} kcal"
+            else -> "打平 0 kcal"
+        }
+        netCard.addView(value(this, netLabel, 24f, netColor))
         netCard.addView(label(this, mode))
         val detail = buildString {
             append("攝取 ${Calc.r0(snap.intakeKcal)} − BMR ${Calc.r0(snap.bmr)}")
             if (snap.activeBurn != null) append(" − 活動 ${Calc.r0(snap.activeBurn)}")
             else append("（TDEE ${Calc.r0(snap.tdeeFallback)}）")
             snap.steps?.let { append("　步數 $it") }
-            snap.weightKg?.let { append("　體重 ${Calc.r1(it)} kg") }
         }
         netCard.addView(label(this, detail, 12f, C.muted))
         if (healthMsg.isNotEmpty()) netCard.addView(label(this, healthMsg, 12f, C.warn))
+        if (u.balance > 50) {
+            val per = Calc.paybackPerDay(u.balance, u.paybackDays.coerceAtLeast(1))
+            netCard.addView(label(this, "還款小提醒：${u.paybackDays} 天打平 → 每天約再少 ${Calc.r0(per)} kcal", 12f, C.warn))
+        }
         body.addView(netCard)
 
-        // Balance summary
-        val bal = card(this)
-        bal.addView(label(this, "累計熱量帳戶（不週清）", 12f))
-        val bCol = if (u.balance > 0) C.danger else if (u.balance < 0) C.primary else C.text
-        bal.addView(value(this, "${if (u.balance > 0) "+" else ""}${Calc.r0(u.balance)} kcal", 28f, bCol))
-        bal.addView(label(this, "約等於 ${"%.2f".format(Calc.fatKg(u.balance))} kg 體脂肪（7700 kcal ≈ 1 kg，僅供估算）"))
-        if (u.balance > 0) {
-            val per = Calc.paybackPerDay(u.balance, u.paybackDays.coerceAtLeast(1))
-            bal.addView(label(this, "還款計畫：${u.paybackDays} 天打平 → 每天約再少 ${Calc.r0(per)} kcal", 13f, C.warn))
-        }
-        bal.setOnClickListener { startActivity(Intent(this, BalanceActivity::class.java)) }
-        body.addView(bal)
-
-        body.addView(primaryBtn(this, "＋ 新增飲食") {
+        body.addView(primaryBtn(this, "＋ 記一筆飲食") {
             startActivity(Intent(this, SearchActivity::class.java))
         })
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -154,19 +182,18 @@ class MainActivity : AppCompatActivity() {
             }
             actions.addView(it)
         }
-        chip("掃條碼") { startActivity(Intent(this, BarcodeScanActivity::class.java)) }
-        chip("自訂／標示") { startActivity(Intent(this, CustomFoodActivity::class.java)) }
-        chip("帳戶") { startActivity(Intent(this, BalanceActivity::class.java)) }
+        chip("條碼") { startActivity(Intent(this, BarcodeScanActivity::class.java)) }
+        chip("標示／自訂") { startActivity(Intent(this, CustomFoodActivity::class.java)) }
+        chip("存摺") { startActivity(Intent(this, BalanceActivity::class.java)) }
         chip("設定") { startActivity(Intent(this, SettingsActivity::class.java)) }
         body.addView(actions)
 
-        // Today's logs
         body.addView(label(this, "今日紀錄", 15f, C.text).apply {
             setPadding(0, dp(12f), 0, dp(6f)); paint.isFakeBoldText = true
         })
         val logs = Store.logs(this, snap.day)
         if (logs.isEmpty()) {
-            body.addView(label(this, "還沒有紀錄。點「新增飲食」開始。", 14f))
+            body.addView(label(this, "還沒有紀錄。點上面幫小豬記一筆吧～", 14f))
         } else {
             logs.forEach { log ->
                 val rowL = card(this).apply {

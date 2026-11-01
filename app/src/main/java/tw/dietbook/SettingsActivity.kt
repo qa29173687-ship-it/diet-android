@@ -40,7 +40,7 @@ class SettingsActivity : AppCompatActivity() {
         val (root, body) = col(this)
         setContentView(root)
         EdgeInsets.pad(root, ime = true)
-        body.addView(titleBar(this, "設定", "BMR／目標／資料更新", onBack = { finish() }))
+        body.addView(titleBar(this, "設定", "BMR・目標・小豬資料", onBack = { finish() }))
 
         body.addView(label(this, "性別"))
         val sexGroup = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
@@ -54,9 +54,9 @@ class SettingsActivity : AppCompatActivity() {
         body.addView(label(this, "年齡")); body.addView(age)
         body.addView(label(this, "身高")); body.addView(height)
         body.addView(label(this, "體重")); body.addView(weight)
-        body.addView(label(this, "BMR（可直接改，或按下方重算）")); body.addView(bmrField)
+        body.addView(label(this, "你的基礎代謝率 BMR（手動為主）")); body.addView(bmrField)
 
-        body.addView(secondaryBtn(this, "用 Mifflin–St Jeor 重算 BMR") {
+        body.addView(secondaryBtn(this, "用小計算機估算 BMR（次要）") {
             val sex = if (sexGroup.checkedRadioButtonId == 2) "female" else "male"
             val a = age.text.toString().toIntOrNull() ?: return@secondaryBtn
             val h = height.text.toString().toDoubleOrNull() ?: return@secondaryBtn
@@ -99,11 +99,11 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         val payDays = field(this, "還款天數", u0.paybackDays.toString())
-        body.addView(label(this, "盈餘還款預設天數")); body.addView(payDays)
+        body.addView(label(this, "進帳還款預設天數")); body.addView(payDays)
         val remindGroup = RadioGroup(this)
         remindGroup.addView(RadioButton(this).apply { text = "開啟每晚提醒（約 20:00）"; id = 1; setTextColor(C.text); isChecked = u0.remindPayback })
         remindGroup.addView(RadioButton(this).apply { text = "關閉提醒"; id = 2; setTextColor(C.text); isChecked = !u0.remindPayback })
-        body.addView(label(this, "熱量帳戶提醒")); body.addView(remindGroup)
+        body.addView(label(this, "存錢筒提醒")); body.addView(remindGroup)
 
         // ---- 資料版本 ----
         body.addView(label(this, "營養資料庫", 15f, C.text).apply {
@@ -170,6 +170,6 @@ class SettingsActivity : AppCompatActivity() {
             finish()
         })
 
-        body.addView(label(this, Tfnd.ATTRIBUTION + "\n" + TraceIndex.ATTRIBUTION + "\n熱量帳戶與體脂換算僅供估算，非醫療建議。", 11f))
+        body.addView(label(this, Tfnd.ATTRIBUTION + "\n" + TraceIndex.ATTRIBUTION + "\n存錢筒與體脂換算僅供估算，非醫療建議。", 11f))
     }
 }

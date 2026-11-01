@@ -1,23 +1,30 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- bowl -->
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M30,52c0,14 10.7,24 24,24s24,-10 24,-24H30z"/>
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M34,50h40c0,-2 -2,-4 -4,-4H38c-2,0 -4,2 -4,4z"/>
-    <!-- chopsticks -->
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="3"
-        android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M62,28 L70,48"/>
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="3"
-        android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M70,26 L74,48"/>
-    <!-- steam -->
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="2.5"
-        android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M44,40c2,-4 -2,-6 0,-10"/>
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="2.5"
-        android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M52,38c2,-4 -2,-6 0,-10"/>
+    <!-- soft circle -->
+    <path android:fillColor="#FFE8F0"
+        android:pathData="M54,18c-18,0 -32,14 -32,32c0,18 14,32 32,32s32,-14 32,-32c0,-18 -14,-32 -32,-32z"/>
+    <!-- body -->
+    <path android:fillColor="#FFB6C8"
+        android:pathData="M54,38c-14,0 -26,11 -26,26c0,12 9,22 26,22s26,-10 26,-22c0,-15 -12,-26 -26,-26z"/>
+    <!-- ears -->
+    <path android:fillColor="#FFB6C8"
+        android:pathData="M34,44c-4,-10 2,-16 8,-12c2,6 0,12 -2,14z"/>
+    <path android:fillColor="#FFB6C8"
+        android:pathData="M74,44c4,-10 -2,-16 -8,-12c-2,6 0,12 2,14z"/>
+    <!-- slot -->
+    <path android:fillColor="#6B4A55"
+        android:pathData="M44,36h20c1,0 2,1 2,2v1c0,1 -1,2 -2,2H44c-1,0 -2,-1 -2,-2v-1c0,-1 1,-2 2,-2z"/>
+    <!-- snout -->
+    <path android:fillColor="#FF9EB5"
+        android:pathData="M54,62c-7,0 -12,4 -12,8s5,8 12,8s12,-4 12,-8s-5,-8 -12,-8z"/>
+    <!-- nostrils -->
+    <path android:fillColor="#6B4A55"
+        android:pathData="M49,70a2,2 0 1,0 0.1,0z M59,70a2,2 0 1,0 0.1,0z"/>
+    <!-- eyes -->
+    <path android:fillColor="#3A2A32"
+        android:pathData="M44,56a3.5,3.5 0 1,0 0.1,0z M64,56a3.5,3.5 0 1,0 0.1,0z"/>
+    <!-- mint spot -->
+    <path android:fillColor="#9ED9C0"
+        android:pathData="M66,70c4,0 8,3 8,6s-4,5 -8,5s-7,-2 -7,-5s3,-6 7,-6z"/>
 </vector>

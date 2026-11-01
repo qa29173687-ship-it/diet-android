@@ -35,18 +35,16 @@ class PreviewTest {
         File(out, "$name.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    private fun seed() {
+    private fun baseProfile(balance: Double) = UserProfile(
+        setupDone = true, sex = "male", age = 32,
+        heightCm = 175.0, weightKg = 72.0, bmr = 1680.0, bmrManual = true,
+        activity = "moderate", goalKcal = 2200.0, goalProtein = 110.0,
+        balance = balance, lastFinalizedDay = Days.yesterdayOf(Days.today()),
+        paybackDays = 7, hcEnabled = false, remindPayback = false,
+    )
+
+    private fun seedLogs() {
         val c = RuntimeEnvironment.getApplication()
-        Store.saveProfile(
-            c,
-            UserProfile(
-                setupDone = true, sex = "male", age = 32,
-                heightCm = 175.0, weightKg = 72.0, bmr = 1680.0, bmrManual = true,
-                activity = "moderate", goalKcal = 2200.0, goalProtein = 110.0,
-                balance = 1850.0, lastFinalizedDay = Days.yesterdayOf(Days.today()),
-                paybackDays = 7, hcEnabled = false, remindPayback = false,
-            )
-        )
         Store.upsertCustom(
             c,
             FoodItem(
@@ -74,14 +72,39 @@ class PreviewTest {
         )
     }
 
-    @Test fun render() {
-        seed()
+    private fun homeShot(liveBalance: Double, name: String) {
         val c = RuntimeEnvironment.getApplication()
+        // Make today's net ≈ 0 so the pig reflects liveBalance cleanly
+        val day = Days.today()
+        val tdee = Calc.tdee(1680.0, "moderate")
+        Store.saveProfile(c, baseProfile(liveBalance))
+        Store.setDataMeta(c, tfndVer = "bundled", traceVer = "bundled-v1",
+            lastChecked = System.currentTimeMillis() - 3600_000, lastUpdated = 0L)
+        Store.saveLogs(
+            c, day,
+            listOf(
+                FoodLog(1, day, "tfnd:fill", "維持熱量（預覽）", 100.0, tdee, 20.0, System.currentTimeMillis()),
+            )
+        )
         val main = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         ShadowLooper.idleMainLooper()
-        Thread.sleep(200)
+        Thread.sleep(350)
         ShadowLooper.idleMainLooper()
-        shot(main, "1-主畫面")
+        shot(main, name)
+        main.finish()
+        ShadowLooper.idleMainLooper()
+    }
+
+    @Test fun render() {
+        // Fat / normal / buff home variants (cumulative balance drives pig)
+        homeShot(4800.0, "1a-主畫面-胖豬")
+        homeShot(0.0, "1b-主畫面-普通豬")
+        homeShot(-4800.0, "1c-主畫面-壯豬")
+        homeShot(1850.0, "1-主畫面")
+
+        val c = RuntimeEnvironment.getApplication()
+        Store.saveProfile(c, baseProfile(1850.0))
+        seedLogs()
 
         val search = Robolectric.buildActivity(SearchActivity::class.java).setup().get()
         shot(search, "2-搜尋")
@@ -90,8 +113,8 @@ class PreviewTest {
         shot(custom, "3-自訂食物")
 
         val bal = Robolectric.buildActivity(BalanceActivity::class.java).setup().get()
-        Thread.sleep(200); ShadowLooper.idleMainLooper()
-        shot(bal, "4-熱量帳戶")
+        Thread.sleep(250); ShadowLooper.idleMainLooper()
+        shot(bal, "4-小豬存摺")
 
         val settings = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
         Thread.sleep(100); ShadowLooper.idleMainLooper()
