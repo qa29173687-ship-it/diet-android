@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -36,6 +40,9 @@ import tw.dietbook.PigMascotView
 import tw.dietbook.PigMood
 import tw.dietbook.PigStats
 import tw.dietbook.PigVitals
+import tw.dietbook.Days
+import tw.dietbook.StatDetail
+import tw.dietbook.StatDetailKind
 
 /** Home v2: top pink daily stats, enlarged center balance, pig + bottom actions. */
 data class HomeV2UiState(
@@ -70,141 +77,165 @@ fun HomeScreenV2(
     onPigReady: (PigMascotView) -> Unit = {},
     onBubble: (String) -> Unit = {},
 ) {
+    val context = LocalContext.current
+    var sheetKind by remember { mutableStateOf<StatDetailKind?>(null) }
     val (headline, amount) = BankCopy.headline(state.balanceKcal)
     val balColor = Color(BankCopy.color(state.balanceKcal))
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(PinkBg)
-            .padding(top = 28.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "熱量存錢筒",
-                    color = TextMain,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text("今天也要好好記帳喔 ♡", color = TextMuted, fontSize = 12.sp)
-            }
-            Text(
-                "👗",
-                fontSize = 20.sp,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onWardrobe)
-                    .padding(8.dp),
-            )
-            Text(
-                "⚙️",
-                fontSize = 22.sp,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onSettings)
-                    .padding(8.dp),
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            StatCard("🍙", "今日攝取", "${state.intakeKcal}", "kcal", Modifier.weight(1f))
-            StatCard("💪", "蛋白質", "${state.proteinG}", "g", Modifier.weight(1f))
-            StatCard("🏃", "運動消耗", "${state.burnKcal}", "kcal", Modifier.weight(1f))
-            StatCard("🏋️", "鍛鍊", "${state.strengthMin}", "分", Modifier.weight(1f))
-        }
-
-        Spacer(Modifier.height(14.dp))
-
+    Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .shadow(6.dp, RoundedCornerShape(28.dp))
-                .clip(RoundedCornerShape(28.dp))
-                .background(CardWhite)
-                .border(2.dp, LinePink, RoundedCornerShape(28.dp))
-                .clickable(onClick = onBalance)
-                .padding(vertical = 18.dp, horizontal = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .fillMaxSize()
+                .background(PinkBg)
+                .padding(top = 28.dp),
         ) {
-            Text("🐷 總存款", color = TextMuted, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                amount,
-                color = balColor,
-                fontSize = 42.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(headline, color = TextMain, fontSize = 13.sp)
-            if (state.tip.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "熱量存錢筒",
+                        color = TextMain,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text("今天也要好好記帳喔 ♡", color = TextMuted, fontSize = 12.sp)
+                }
                 Text(
-                    state.tip,
-                    color = TextMuted,
-                    fontSize = 11.sp,
+                    "👗",
+                    fontSize = 20.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(onClick = onWardrobe)
+                        .padding(8.dp),
+                )
+                Text(
+                    "⚙️",
+                    fontSize = 22.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(onClick = onSettings)
+                        .padding(8.dp),
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                StatCard("🍙", "今日攝取", "${state.intakeKcal}", "kcal", Modifier.weight(1f)) {
+                    sheetKind = StatDetailKind.INTAKE
+                }
+                StatCard("💪", "蛋白質", "${state.proteinG}", "g", Modifier.weight(1f)) {
+                    sheetKind = StatDetailKind.PROTEIN
+                }
+                StatCard("🏃", "運動消耗", "${state.burnKcal}", "kcal", Modifier.weight(1f)) {
+                    sheetKind = StatDetailKind.BURN
+                }
+                StatCard("🏋️", "鍛鍊", "${state.strengthMin}", "分", Modifier.weight(1f)) {
+                    sheetKind = StatDetailKind.STRENGTH
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .shadow(6.dp, RoundedCornerShape(28.dp))
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(CardWhite)
+                    .border(2.dp, LinePink, RoundedCornerShape(28.dp))
+                    .clickable(onClick = onBalance)
+                    .padding(vertical = 18.dp, horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("🐷 總存款", color = TextMuted, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    amount,
+                    color = balColor,
+                    fontSize = 42.sp,
+                    fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(Modifier.height(2.dp))
+                Text(headline, color = TextMain, fontSize = 13.sp)
+                if (state.tip.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        state.tip,
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(horizontal = 12.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(CardPink)
+                    .border(2.dp, LinePink, RoundedCornerShape(24.dp)),
+            ) {
+                PigArena(
+                    balanceKcal = state.balanceKcal,
+                    vitals = state.vitals,
+                    modifier = Modifier.fillMaxSize(),
+                    onPigReady = onPigReady,
+                    onBubble = onBubble,
+                )
+                Text(
+                    "長按抓住｜拖曳甩飛｜點空白處走過去",
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 8.dp),
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ActionButton("🍙", "吃", "記飲食", Modifier.weight(1f), onEat)
+                ActionButton("🏃", "運動", "有氧", Modifier.weight(1f), onCardio)
+                ActionButton("🏋️", "鍛鍊", "重訓部位", Modifier.weight(1f), onStrength)
             }
         }
 
-        Spacer(Modifier.height(10.dp))
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(horizontal = 12.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(CardPink)
-                .border(2.dp, LinePink, RoundedCornerShape(24.dp)),
-        ) {
-            PigArena(
-                balanceKcal = state.balanceKcal,
-                vitals = state.vitals,
-                modifier = Modifier.fillMaxSize(),
-                onPigReady = onPigReady,
-                onBubble = onBubble,
+        sheetKind?.let { kind ->
+            val day = Days.today()
+            StatDetailBottomSheet(
+                kind = kind,
+                intake = if (kind == StatDetailKind.INTAKE) StatDetail.intake(context, day) else null,
+                protein = if (kind == StatDetailKind.PROTEIN) StatDetail.protein(context, day) else null,
+                burn = if (kind == StatDetailKind.BURN) StatDetail.burn(context, day) else null,
+                strength = if (kind == StatDetailKind.STRENGTH) StatDetail.strength(context, day) else null,
+                onDismiss = { sheetKind = null },
             )
-            Text(
-                "長按抓住｜拖曳甩飛｜點空白處走過去",
-                color = TextMuted,
-                fontSize = 11.sp,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 8.dp),
-            )
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            ActionButton("🍙", "吃", "記飲食", Modifier.weight(1f), onEat)
-            ActionButton("🏃", "運動", "有氧", Modifier.weight(1f), onCardio)
-            ActionButton("🏋️", "鍛鍊", "重訓部位", Modifier.weight(1f), onStrength)
         }
     }
 }
@@ -216,6 +247,7 @@ private fun StatCard(
     value: String,
     unit: String,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -223,6 +255,7 @@ private fun StatCard(
             .clip(RoundedCornerShape(18.dp))
             .background(CardWhite)
             .border(1.5.dp, LinePink, RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
             .padding(vertical = 10.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
