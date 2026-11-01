@@ -424,6 +424,11 @@ object Store {
             .apply()
     }
 
+    fun lastSeenSummaryDay(ctx: Context): String = p(ctx).getString("lastSeenSummaryDay", "") ?: ""
+    fun setLastSeenSummaryDay(ctx: Context, day: String) {
+        p(ctx).edit().putString("lastSeenSummaryDay", day).apply()
+    }
+
     fun lastBmrCoinDay(ctx: Context): String = p(ctx).getString("lastBmrCoinDay", "") ?: ""
     fun setLastBmrCoinDay(ctx: Context, day: String) {
         p(ctx).edit().putString("lastBmrCoinDay", day).apply()

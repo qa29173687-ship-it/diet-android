@@ -12,11 +12,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -33,17 +30,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import tw.dietbook.AdviceCard
-import tw.dietbook.AdviceKind
 import tw.dietbook.BankCopy
 import tw.dietbook.C
-import tw.dietbook.DailyAdvice
 import tw.dietbook.PigMascotView
 import tw.dietbook.PigMood
 import tw.dietbook.PigStats
 import tw.dietbook.PigVitals
 
-/** Home v2: top pink daily stats, enlarged center balance, advice, pig + bottom actions. */
+/** Home v2: top pink daily stats, enlarged center balance, pig + bottom actions. */
 data class HomeV2UiState(
     val intakeKcal: Int,
     val proteinG: Int,
@@ -53,7 +47,6 @@ data class HomeV2UiState(
     val bmr: Double = 0.0,
     val tip: String = "",
     val vitals: PigVitals = PigVitals(72, 78, 68),
-    val advice: AdviceCard? = null,
 )
 
 private val PinkBg = Color(C.bg)
@@ -63,14 +56,6 @@ private val LinePink = Color(C.line)
 private val TextMain = Color(C.text)
 private val TextMuted = Color(C.muted)
 private val PrimaryPink = Color(C.primary)
-private val WarnSoft = Color(C.warn)
-private val MintSoft = Color(C.mint)
-private val DangerSoft = Color(C.danger)
-
-fun HomeV2UiState.withAdvice(): HomeV2UiState {
-    val card = DailyAdvice.of(intakeKcal.toDouble(), bmr, balanceKcal)
-    return copy(advice = card)
-}
 
 @Composable
 fun HomeScreenV2(
@@ -87,11 +72,6 @@ fun HomeScreenV2(
 ) {
     val (headline, amount) = BankCopy.headline(state.balanceKcal)
     val balColor = Color(BankCopy.color(state.balanceKcal))
-    val advice = state.advice ?: DailyAdvice.of(
-        state.intakeKcal.toDouble(),
-        state.bmr,
-        state.balanceKcal,
-    )
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -185,11 +165,7 @@ fun HomeScreenV2(
             }
         }
 
-        Spacer(Modifier.height(8.dp))
-
-        AdviceBanner(advice = advice, modifier = Modifier.padding(horizontal = 20.dp))
-
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
 
         Box(
             modifier = Modifier
@@ -230,31 +206,6 @@ fun HomeScreenV2(
             ActionButton("🏃", "運動", "有氧", Modifier.weight(1f), onCardio)
             ActionButton("🏋️", "鍛鍊", "重訓部位", Modifier.weight(1f), onStrength)
         }
-    }
-}
-
-@Composable
-private fun AdviceBanner(advice: AdviceCard, modifier: Modifier = Modifier) {
-    val (bg, border, accent) = when (advice.kind) {
-        AdviceKind.BELOW_BMR -> Triple(Color(0xFFFFF0F3), Color(0xFFFFC2D0), DangerSoft)
-        AdviceKind.SURPLUS_CARE -> Triple(Color(0xFFFFF7EC), Color(0xFFFFD9A8), WarnSoft)
-        AdviceKind.PRAISE -> Triple(Color(0xFFF0FFF6), Color(0xFFB8E8C8), MintSoft)
-    }
-    val scroll = rememberScrollState()
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .shadow(2.dp, RoundedCornerShape(20.dp))
-            .clip(RoundedCornerShape(20.dp))
-            .background(bg)
-            .border(1.5.dp, border, RoundedCornerShape(20.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-            .heightIn(max = 120.dp)
-            .verticalScroll(scroll),
-    ) {
-        Text(advice.title, color = accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
-        Text(advice.body, color = TextMain, fontSize = 11.sp, lineHeight = 16.sp)
     }
 }
 
@@ -358,7 +309,7 @@ private fun PigArena(
     )
 }
 
-/** Sample for UI demo / Robolectric — rule 1: intake below BMR. */
+/** Sample for UI demo / Robolectric. */
 object HomeV2Sample {
     val belowBmr = HomeV2UiState(
         intakeKcal = 980,
@@ -369,7 +320,7 @@ object HomeV2Sample {
         bmr = 1320.0,
         tip = "目標：每天溫柔缺口，但別低於 BMR",
         vitals = PigVitals(satiety = 38, mood = 55, energy = 48),
-    ).withAdvice()
+    )
 
     val state = belowBmr
 }

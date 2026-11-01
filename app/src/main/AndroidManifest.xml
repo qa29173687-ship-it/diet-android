@@ -50,6 +50,7 @@
         <activity android:name=".HomeV2DemoActivity" android:exported="false" android:screenOrientation="portrait"/>
         <activity android:name=".StrengthActivity" android:exported="false" android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".DailySummaryActivity" android:exported="false" android:screenOrientation="portrait"/>
         <activity android:name=".BalanceActivity" android:exported="false" android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize"/>
         <activity-alias
@@ -63,6 +64,7 @@
             </intent-filter>
         </activity-alias>
         <receiver android:name=".ReminderReceiver" android:exported="false"/>
+        <receiver android:name=".SummaryReceiver" android:exported="false"/>
         <receiver android:name=".HungryReceiver" android:exported="false"/>
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>

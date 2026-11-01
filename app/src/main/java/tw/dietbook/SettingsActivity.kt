@@ -3,6 +3,7 @@ package tw.dietbook
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.content.Intent
 import android.os.Bundle
 import android.widget.ArrayAdapter
 import android.widget.RadioButton
@@ -104,6 +105,14 @@ class SettingsActivity : AppCompatActivity() {
         remindGroup.addView(RadioButton(this).apply { text = "開啟每晚提醒（約 20:00）"; id = 1; setTextColor(C.text); isChecked = u0.remindPayback })
         remindGroup.addView(RadioButton(this).apply { text = "關閉提醒"; id = 2; setTextColor(C.text); isChecked = !u0.remindPayback })
         body.addView(label(this, "存錢筒提醒")); body.addView(remindGroup)
+
+        body.addView(secondaryBtn(this, "🐷 查看每日總結") {
+            startActivity(DailySummaryActivity.intent(this, Days.today()))
+        })
+        body.addView(secondaryBtn(this, "🐷 查看昨日總結") {
+            startActivity(DailySummaryActivity.intent(this, Days.yesterdayOf(Days.today())))
+        })
+        body.addView(label(this, "每晚約 21:30 會通知每日總結；隔天第一次打開也會先看昨天的總結。", 12f, C.muted))
 
         // ---- 小豬與音效 ----
         body.addView(label(this, "小豬互動", 15f, C.text).apply {
@@ -209,6 +218,7 @@ class SettingsActivity : AppCompatActivity() {
                 ) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
                 else Notify.scheduleDaily(this, true)
             } else Notify.scheduleDaily(this, false)
+            Notify.scheduleDailySummary(this)
             Toast.makeText(this, "已儲存", Toast.LENGTH_SHORT).show()
             finish()
         })

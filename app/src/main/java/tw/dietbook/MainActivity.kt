@@ -21,17 +21,18 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import tw.dietbook.ui.HomeScreenV2
 import tw.dietbook.ui.HomeV2UiState
-import tw.dietbook.ui.withAdvice
 import java.util.Calendar
 import java.util.TimeZone
 
 /**
- * 電子雞首頁 v2.4：上方今日數值、放大總存款、每日建議、場地小豬、底部吃／運動／鍛鍊。
+ * 電子雞首頁 v2.4.1：上方今日數值、放大總存款、場地小豬、底部吃／運動／鍛鍊。
+ * 建議改在「每日總結」顯示。
  */
 class MainActivity : AppCompatActivity() {
     private var pig: PigMascotView? = null
     private var healthMsg = ""
     private var playingFx = false
+    private var pendingMomentsAfterSummary = false
     private var uiState by mutableStateOf(
         HomeV2UiState(
             intakeKcal = 0,
@@ -40,7 +41,7 @@ class MainActivity : AppCompatActivity() {
             strengthMin = 0,
             balanceKcal = 0.0,
             bmr = 0.0,
-        ).withAdvice(),
+        ),
     )
     private var bubbleMsg by mutableStateOf<String?>(null)
 
@@ -77,15 +78,16 @@ class MainActivity : AppCompatActivity() {
                 onStrength = { startActivity(Intent(this, StrengthActivity::class.java)) },
                 onSettings = { startActivity(Intent(this, SettingsActivity::class.java)) },
                 onWardrobe = { showWardrobe() },
-                onBalance = { startActivity(Intent(this, BalanceActivity::class.java)) },
+                onBalance = {
+                    // 總存款 → 今日每日總結（內有存摺入口）
+                    startActivity(DailySummaryActivity.intent(this, Days.today()))
+                },
                 onPigReady = { p ->
                     pig = p
                     p.onBubble = { msg -> bubbleMsg = msg }
                     applyOutfit()
                 },
-                onBubble = { msg ->
-                    bubbleMsg = msg
-                },
+                onBubble = { msg -> bubbleMsg = msg },
             )
         }
 
@@ -95,6 +97,22 @@ class MainActivity : AppCompatActivity() {
         maybeAskHealth()
         maybeAskLocation()
         Notify.scheduleHungryCheck(this)
+        Notify.scheduleDailySummary(this)
+
+        // Deep link from summary notification / other entry
+        maybeOpenSummaryFromIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        maybeOpenSummaryFromIntent(intent)
+    }
+
+    private fun maybeOpenSummaryFromIntent(intent: Intent?) {
+        val day = intent?.getStringExtra(DailySummaryActivity.EXTRA_DAY) ?: return
+        startActivity(DailySummaryActivity.intent(this, day))
+        intent.removeExtra(DailySummaryActivity.EXTRA_DAY)
     }
 
     override fun onPause() {
@@ -166,6 +184,35 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun maybeDailyMoments(u: UserProfile, snap: DaySnapshot) {
+        if (playingFx) return
+        val today = Days.today()
+        val yesterday = Days.yesterdayOf(today)
+
+        // First open of a new day: show yesterday's 每日總結 before BMR coin, if not yet seen.
+        if (Store.lastSeenSummaryDay(this) != yesterday && Store.lastOpenDay(this) != today) {
+            // Only if there is something to summarize (setup was done yesterday or we have a snap / logs)
+            val hasData = Store.snapshot(this, yesterday) != null ||
+                Store.dayTotals(this, yesterday).first > 0 ||
+                Store.manualBurn(this, yesterday) > 0
+            if (hasData || Store.profile(this).lastFinalizedDay == yesterday ||
+                Store.profile(this).lastFinalizedDay.isNotEmpty()
+            ) {
+                pendingMomentsAfterSummary = true
+                startActivity(DailySummaryActivity.intent(this, yesterday, fromMorning = true))
+                // Mark open day so we don't loop; BMR coin deferred until resume after summary
+                Store.setLastOpenDay(this, today)
+                return
+            }
+        }
+
+        if (pendingMomentsAfterSummary) {
+            pendingMomentsAfterSummary = false
+        }
+
+        playDailyMoments(u, snap)
+    }
+
+    private fun playDailyMoments(u: UserProfile, snap: DaySnapshot) {
         if (playingFx) return
         val today = Days.today()
         val away = Store.lastAwayMs(this)
@@ -277,6 +324,7 @@ class MainActivity : AppCompatActivity() {
             if (u.streakDays > 0) append("｜連續 ${u.streakDays} 天")
             if (o != OutfitId.NONE) append("｜裝：${o.emoji}")
             if (healthMsg.isNotEmpty()) append("｜").append(healthMsg)
+            append("｜點總存款看每日總結")
         }
 
         uiState = HomeV2UiState(
@@ -288,7 +336,7 @@ class MainActivity : AppCompatActivity() {
             bmr = u.bmr,
             tip = tip,
             vitals = vitals,
-        ).withAdvice()
+        )
 
         pig?.let { p ->
             p.setBalance(live, animate = true)

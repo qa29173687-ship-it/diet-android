@@ -1,5 +1,6 @@
 package tw.dietbook
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.Toast
@@ -41,6 +42,9 @@ class BalanceActivity : AppCompatActivity() {
         bal.addView(label(this, BankCopy.tip(u.balance), 13f, C.text))
         bal.addView(label(this, "說明：進帳＝吃超過消耗（小豬變圓）；存款／缺口＝吃少於消耗（小豬變壯）。粗估而已，個體差很大。", 12f, C.muted))
         body.addView(bal)
+        body.addView(secondaryBtn(this, "🐷 每日總結") {
+            startActivity(DailySummaryActivity.intent(this, Days.today()))
+        })
 
         val today = card(this)
         today.addView(label(this, "今日尚未入帳的淨值（跨日才定案）", 12f))

@@ -9,7 +9,6 @@ import androidx.core.view.WindowCompat
 import tw.dietbook.ui.HomeScreenV2
 import tw.dietbook.ui.HomeV2Sample
 import tw.dietbook.ui.HomeV2UiState
-import tw.dietbook.ui.withAdvice
 
 /**
  * Demo host for Robolectric preview shots. Not the launcher.
@@ -29,7 +28,7 @@ class HomeV2DemoActivity : ComponentActivity() {
                 bmr = intent.getDoubleExtra(EXTRA_BMR, 1320.0),
                 tip = intent.getStringExtra(EXTRA_TIP) ?: HomeV2Sample.state.tip,
                 vitals = HomeV2Sample.state.vitals,
-            ).withAdvice()
+            )
             else -> HomeV2Sample.belowBmr
         }
         setContent {
