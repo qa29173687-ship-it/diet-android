@@ -135,7 +135,7 @@ class StrengthActivity : AppCompatActivity() {
                     CuteFx.play(this, CuteScene.POSING, label = "${selectedPart}滿等！小豬上台秀一下～") { afterPose() }
                 } else afterPose()
             }
-            CuteFx.play(this, CuteScene.HANDS_POUR, kcal = kcal.coerceAtLeast(0.0)) { afterPour() }
+            CuteFx.play(this, CuteScene.LIFT, kcal = kcal.coerceAtLeast(0.0)) { afterPour() }
         })
 
         body.addView(label(this, "今日鍛鍊", 15f, C.text).apply {

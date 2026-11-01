@@ -110,7 +110,7 @@ class CardioActivity : AppCompatActivity() {
             Outfits.maybeUnlockFromStreak(this)
             val streak = Store.profile(this).streakDays
             Sfx.pour(this)
-            CuteFx.play(this, CuteScene.HANDS_POUR, kcal = kcal) {
+            CuteFx.play(this, CuteScene.TREADMILL, kcal = kcal) {
                 Praise.show(this, Praise.cardioLine(Calc.r0(kcal), streak), R.drawable.pig_workout) {
                     finish()
                 }

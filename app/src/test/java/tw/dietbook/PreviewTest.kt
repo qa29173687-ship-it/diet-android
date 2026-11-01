@@ -165,6 +165,8 @@ class PreviewTest {
             CuteScene.FIREWORKS_KG to "13-減重煙火",
             CuteScene.POSING to "14-上台秀",
             CuteScene.MORNING to "15-早安",
+            CuteScene.LIFT to "16-重訓舉重",
+            CuteScene.TREADMILL to "17-有氧跑步機",
         )
         scenes.forEach { (sc, name) ->
             val b = CuteFx.capture(c, sc, 0.55f, label = "預覽")

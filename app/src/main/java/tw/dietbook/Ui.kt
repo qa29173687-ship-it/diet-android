@@ -174,9 +174,15 @@ object BankCopy {
         else -> C.text
     }
 
-    fun tip(balance: Double): String = when {
-        balance > 50 -> "小豬變圓圓的～多動一下或少吃一點，慢慢還款就好。"
-        balance < -50 -> "太棒了！缺口就是你的存款，小豬正在變壯 💪"
-        else -> "今天保持覺察，小豬會陪著你。"
+    fun tip(balance: Double): String {
+        val stage = PigSprites.fromBalance(balance)
+        return when (stage) {
+            BodyStage.FAT3 -> BodyStage.FAT3.hint
+            BodyStage.FAT2 -> BodyStage.FAT2.hint
+            BodyStage.FAT1 -> BodyStage.FAT1.hint
+            BodyStage.SLIM2 -> BodyStage.SLIM2.hint  // 太瘦：溫柔提醒多吃，不鼓勵繼續缺口
+            BodyStage.SLIM1 -> BodyStage.SLIM1.hint  // 缺口約 500–1000：不鼓勵再加深
+            BodyStage.NORMAL -> BodyStage.NORMAL.hint
+        }
     }
 }

@@ -138,7 +138,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         arena.addView(bubble)
-        hint = label(this, "點頭蹭蹭｜戳肚皮會笑｜長時間不理會會躲角落", 11f, C.muted).apply {
+        hint = label(this, "長按抓住｜拖曳甩飛｜點空白處走過去｜紀錄會播動畫", 11f, C.muted).apply {
             gravity = Gravity.CENTER_HORIZONTAL
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT

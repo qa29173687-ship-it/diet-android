@@ -5,7 +5,6 @@ import android.app.Activity
 import android.app.Dialog
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -16,7 +15,7 @@ import android.graphics.drawable.ColorDrawable
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.OvershootInterpolator
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import kotlin.math.PI
 import kotlin.math.cos
@@ -33,6 +32,8 @@ enum class CuteScene {
     FIREWORKS_KG,
     POSING,
     MORNING,
+    LIFT,
+    TREADMILL,
 }
 
 data class PendingCute(
@@ -43,13 +44,19 @@ data class PendingCute(
 )
 
 /**
- * Full-screen soft springy overlay for A/B/C + milestones.
- * Pig body uses the same v2.1.0 sticker sprites / crop / scale as PigMascotView;
- * props (coins, hands, milk, crown, fireworks) are drawn around that sprite.
+ * 全螢幕可愛動畫。小豬本體一律用目前體型階段的 WebP 貼圖，
+ * 金幣／雙手／花火等道具仍以程式繪製。
  */
 object CuteFx {
     fun queue(ctx: Context, p: PendingCute) = Store.queueCute(ctx, p)
     fun pop(ctx: Context): PendingCute? = Store.popCute(ctx)
+
+    fun currentStage(ctx: Context): BodyStage {
+        val u = Store.profile(ctx)
+        val snap = Store.snapshot(ctx, Days.today())
+        val live = u.balance + (snap?.net ?: 0.0)
+        return PigSprites.fromBalance(live)
+    }
 
     fun play(activity: Activity, scene: CuteScene, kcal: Double = 0.0, protein: Double = 0.0, label: String = "", onDone: (() -> Unit)? = null) {
         if (activity.isFinishing) {
@@ -67,7 +74,7 @@ object CuteFx {
                 onDone?.invoke()
             }
         }
-        val stage = StageView(activity, scene, kcal, protein, label, finish)
+        val stage = StageView(activity, scene, kcal, protein, label, currentStage(activity), finish)
         dlg.setContentView(FrameLayout(activity).apply {
             setBackgroundColor(0x66000000.toInt())
             addView(stage, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -82,23 +89,32 @@ object CuteFx {
         when (scene) {
             CuteScene.BMR_COIN, CuteScene.HANDS_POUR, CuteScene.FIREWORKS_KG -> Sfx.coin(activity)
             CuteScene.FOOD_CATCH -> Sfx.chew(activity)
-            CuteScene.PROTEIN_POWER -> Sfx.sparkle(activity)
+            CuteScene.PROTEIN_POWER, CuteScene.LIFT, CuteScene.POSING -> Sfx.sparkle(activity)
             CuteScene.SURPLUS_BELLY -> Sfx.burp(activity)
-            CuteScene.POSING -> Sfx.sparkle(activity)
             CuteScene.MORNING -> Sfx.yawn(activity)
+            CuteScene.TREADMILL -> Sfx.coin(activity)
         }
     }
 
-    /** Robolectric / preview helper — draws one frame at progress 0..1. */
-    fun capture(ctx: Context, scene: CuteScene, progress: Float, w: Int = 800, h: Int = 1200, kcal: Double = 500.0, protein: Double = 90.0, label: String = ""): android.graphics.Bitmap {
-        val view = StageView(ctx, scene, kcal, protein, label) {}
+    fun capture(
+        ctx: Context,
+        scene: CuteScene,
+        progress: Float,
+        w: Int = 800,
+        h: Int = 1200,
+        kcal: Double = 500.0,
+        protein: Double = 90.0,
+        label: String = "",
+        stage: BodyStage = BodyStage.NORMAL,
+    ): Bitmap {
+        val view = StageView(ctx, scene, kcal, protein, label, stage) {}
         view.forceProgress(progress)
         view.measure(
             View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY),
         )
         view.layout(0, 0, w, h)
-        val b = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(b)
         c.drawColor(0xFFFFF0F5.toInt())
         view.draw(c)
@@ -120,6 +136,7 @@ private class StageView(
     private val kcal: Double,
     private val protein: Double,
     private val label: String,
+    private val bodyStage: BodyStage,
     private val onDone: () -> Unit,
 ) : View(ctx) {
     private var t = 0f
@@ -134,17 +151,17 @@ private class StageView(
     private val sparkles = List(18) {
         floatArrayOf(Random.nextFloat(), Random.nextFloat(), Random.nextFloat() * 360f, 0.4f + Random.nextFloat())
     }
-    private val pigCache = HashMap<Int, Bitmap>()
+    private val durationMs = when (scene) {
+        CuteScene.HANDS_POUR -> 2200L
+        CuteScene.FOOD_CATCH, CuteScene.LIFT, CuteScene.TREADMILL -> 3000L
+        CuteScene.FIREWORKS_KG -> 2600L
+        CuteScene.POSING -> 2800L
+        CuteScene.MORNING -> 1800L
+        else -> 1600L
+    }
     private val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-        duration = when (scene) {
-            CuteScene.HANDS_POUR -> 2200L
-            CuteScene.FOOD_CATCH -> 2000L
-            CuteScene.FIREWORKS_KG -> 2600L
-            CuteScene.POSING -> 2800L
-            CuteScene.MORNING -> 1800L
-            else -> 1600L
-        }
-        interpolator = OvershootInterpolator(1.15f)
+        duration = durationMs
+        interpolator = LinearInterpolator()
         addUpdateListener {
             t = it.animatedFraction
             invalidate()
@@ -155,9 +172,7 @@ private class StageView(
         }
     }
 
-    init {
-        anim.start()
-    }
+    init { anim.start() }
 
     fun forceProgress(p: Float) {
         anim.cancel()
@@ -173,9 +188,7 @@ private class StageView(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_DOWN) {
-            skip(); return true
-        }
+        if (event.action == MotionEvent.ACTION_DOWN) { skip(); return true }
         return super.onTouchEvent(event)
     }
 
@@ -184,29 +197,18 @@ private class StageView(
         anim.cancel()
     }
 
-    private fun pigBmp(res: Int): Bitmap =
-        pigCache.getOrPut(res) {
-            BitmapFactory.decodeResource(resources, res)
-                ?: error("missing pig sprite $res")
-        }
-
-    /**
-     * Same sizing rule as PigMascotView v2.1.0:
-     * baseSize = targetW; dw = baseSize; dh = baseSize / aspect.
-     * Returns (dw, dh) of the unscaled sprite box.
-     */
-    private fun drawPigSprite(
+    private fun drawPigFrame(
         canvas: Canvas,
         cx: Float,
         cy: Float,
         targetW: Float,
-        res: Int,
+        frame: String,
         scaleX: Float = 1f,
         scaleY: Float = 1f,
         rotation: Float = 0f,
     ): FloatArray {
-        val bm = pigBmp(res)
-        val aspect = bm.width.toFloat() / bm.height.toFloat()
+        val bm = PigSprites.get(context, bodyStage, frame)
+        val aspect = bm.width.toFloat() / bm.height.toFloat().coerceAtLeast(1f)
         val dw = targetW
         val dh = targetW / aspect
         canvas.save()
@@ -218,13 +220,29 @@ private class StageView(
         return floatArrayOf(dw, dh)
     }
 
+    /** lift/treadmill pattern: 1→2→1→2→3 over ~3s */
+    private fun workoutFrame(names: Array<String>): String {
+        val slots = floatArrayOf(0f, 0.2f, 0.4f, 0.6f, 0.8f, 1.01f)
+        val seq = intArrayOf(0, 1, 0, 1, 2)
+        for (i in seq.indices) {
+            if (t < slots[i + 1]) return names[seq[i]]
+        }
+        return names.last()
+    }
+
+    private fun bentoFrame(): String = when {
+        t < 0.22f -> PigSprites.BENTO_BOX
+        t < 0.45f -> PigSprites.BENTO_HOLD
+        t < 0.78f -> PigSprites.BENTO_EAT
+        else -> PigSprites.BENTO_THUMB
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0 || h <= 0) return
         val cx = w / 2f; val cy = h * 0.48f
         val s = min(w, h)
-        // Match home mascot: ~0.42 of the shorter side as sprite width.
         val pigW = s * 0.42f
         when (scene) {
             CuteScene.BMR_COIN -> drawBmr(canvas, cx, cy, s, pigW)
@@ -235,6 +253,8 @@ private class StageView(
             CuteScene.FIREWORKS_KG -> drawFireworks(canvas, cx, cy, s, pigW)
             CuteScene.POSING -> drawPosing(canvas, cx, cy, s, pigW)
             CuteScene.MORNING -> drawMorning(canvas, cx, cy, s, pigW)
+            CuteScene.LIFT -> drawLift(canvas, cx, cy, s, pigW)
+            CuteScene.TREADMILL -> drawTreadmill(canvas, cx, cy, s, pigW)
         }
         text.textSize = 18f * resources.displayMetrics.scaledDensity
         val cap = when (scene) {
@@ -246,6 +266,8 @@ private class StageView(
             CuteScene.FIREWORKS_KG -> "你減掉 1 公斤了！"
             CuteScene.POSING -> if (label.isNotEmpty()) label else "部位滿等！上台秀一下～"
             CuteScene.MORNING -> "早安～"
+            CuteScene.LIFT -> "重訓打卡！小豬一起舉～\n−${Calc.r0(kcal)} kcal"
+            CuteScene.TREADMILL -> "有氧存進小豬！\n−${Calc.r0(kcal)} kcal"
         }
         var y = h * 0.78f
         cap.split('\n').forEach { line ->
@@ -277,15 +299,13 @@ private class StageView(
     private fun drawBmr(canvas: Canvas, cx: Float, cy: Float, s: Float, pigW: Float) {
         val e = ease(t)
         val pigY = cy + s * 0.06f
-        val size = drawPigSprite(canvas, cx, pigY, pigW, R.drawable.pig_normal)
+        val size = drawPigFrame(canvas, cx, pigY, pigW, PigSprites.WALK_1)
         val dh = size[1]
-        // Coin drops into the sticker's own slot (top of head) — no fake slot drawn.
         val slotY = pigY - dh * 0.42f
         val coinY = cy - s * 0.42f + (slotY - (cy - s * 0.42f)) * e
-        val spin = t * 720f
         canvas.save()
         canvas.translate(cx, coinY)
-        canvas.rotate(spin)
+        canvas.rotate(t * 720f)
         drawCoinFixed(canvas, 0f, 0f, s * 0.05f)
         canvas.restore()
         if (t > 0.7f) drawSparkles(canvas, cx, slotY, s * 0.2f, (t - 0.7f) / 0.3f)
@@ -294,16 +314,14 @@ private class StageView(
     private fun drawPour(canvas: Canvas, cx: Float, cy: Float, s: Float, pigW: Float) {
         val pigY = cy + s * 0.08f
         val shake = sin(t * 28f) * s * 0.012f * (if (t in 0.15f..0.75f) 1f else 0f)
-        val size = drawPigSprite(canvas, cx + shake, pigY, pigW, R.drawable.pig_normal)
+        val size = drawPigFrame(canvas, cx + shake, pigY, pigW, PigSprites.BOUNCE_HAPPY)
         val dw = size[0]; val dh = size[1]
-        // Hands hug the sticker pig from both sides
         paint.style = Paint.Style.FILL
         paint.color = 0xFFFFE0B2.toInt()
         val handY = pigY + dh * 0.05f + sin(t * 20f) * s * 0.01f
         val handR = s * 0.055f
         canvas.drawCircle(cx - dw * 0.52f + shake, handY, handR, paint)
         canvas.drawCircle(cx + dw * 0.52f + shake, handY, handR, paint)
-        // Coins pour into top of pig
         val n = 7
         for (i in 0 until n) {
             val ph = ((t * 1.2f) - i * 0.08f).coerceIn(0f, 1f)
@@ -319,30 +337,41 @@ private class StageView(
 
     private fun drawFood(canvas: Canvas, cx: Float, cy: Float, s: Float, pigW: Float) {
         val pigY = cy + s * 0.06f
-        val chew = 1f + 0.05f * sin(t * 40f) * if (t in 0.35f..0.75f) 1f else 0f
-        val res = if (t >= 0.35f) R.drawable.pig_eat else R.drawable.pig_normal
-        val size = drawPigSprite(canvas, cx, pigY, pigW, res, scaleX = chew, scaleY = chew)
-        val dh = size[1]
-        val drop = ease((t / 0.35f).coerceIn(0f, 1f))
-        val fy = cy - s * 0.4f + (pigY - dh * 0.05f - (cy - s * 0.4f)) * drop
+        val frame = bentoFrame()
+        val chew = if (frame == PigSprites.BENTO_EAT) 1f + 0.04f * sin(t * 36f) else 1f
+        drawPigFrame(canvas, cx, pigY, pigW, frame, scaleX = chew, scaleY = chew)
+        if (t > 0.82f) drawSparkles(canvas, cx, pigY, s * 0.2f, (t - 0.82f) / 0.18f)
+    }
+
+    private fun drawLift(canvas: Canvas, cx: Float, cy: Float, s: Float, pigW: Float) {
+        val pigY = cy + s * 0.05f
+        drawPigFrame(canvas, cx, pigY, pigW, workoutFrame(PigSprites.LIFT))
+        if (t > 0.75f) drawSparkles(canvas, cx, pigY, s * 0.22f, (t - 0.75f) / 0.25f)
+    }
+
+    private fun drawTreadmill(canvas: Canvas, cx: Float, cy: Float, s: Float, pigW: Float) {
+        val pigY = cy + s * 0.05f
+        // soft treadmill base
         paint.style = Paint.Style.FILL
-        paint.color = 0xFFFFB86C.toInt()
-        if (t < 0.4f) {
-            canvas.drawRoundRect(RectF(cx - s * 0.04f, fy - s * 0.03f, cx + s * 0.04f, fy + s * 0.03f), 10f, 10f, paint)
-        }
-        if (t in 0.35f..0.5f) drawSparkles(canvas, cx, pigY - dh * 0.05f, s * 0.12f, (t - 0.35f) / 0.15f)
-        if (t > 0.82f) {
-            paint.color = 0x66FFFFFF
-            canvas.drawCircle(cx + s * 0.18f, pigY - dh * 0.2f, s * 0.05f * (t - 0.82f) / 0.18f, paint)
-        }
+        paint.color = 0xFFB0BEC5.toInt()
+        canvas.drawRoundRect(
+            RectF(cx - s * 0.22f, pigY + s * 0.16f, cx + s * 0.22f, pigY + s * 0.22f),
+            10f, 10f, paint,
+        )
+        paint.color = 0xFF78909C.toInt()
+        canvas.drawRoundRect(
+            RectF(cx - s * 0.24f, pigY + s * 0.14f, cx - s * 0.18f, pigY + s * 0.24f),
+            6f, 6f, paint,
+        )
+        drawPigFrame(canvas, cx, pigY, pigW, workoutFrame(PigSprites.RUN))
+        if (t > 0.75f) drawSparkles(canvas, cx, pigY, s * 0.22f, (t - 0.75f) / 0.25f)
     }
 
     private fun drawProtein(canvas: Canvas, cx: Float, cy: Float, s: Float, pigW: Float) {
         val pigY = cy + s * 0.05f
-        val size = drawPigSprite(canvas, cx, pigY, pigW, R.drawable.pig_buff)
+        val size = drawPigFrame(canvas, cx, pigY, pigW, PigSprites.LIFT_3)
         val dw = size[0]; val dh = size[1]
         val e = ease(t)
-        // Milk carton to the left of the pig
         paint.style = Paint.Style.FILL
         paint.color = 0xFFFFFFFF.toInt()
         val mx = cx - dw * 0.62f
@@ -350,7 +379,6 @@ private class StageView(
         canvas.drawRoundRect(RectF(mx - s * 0.05f, my - s * 0.08f, mx + s * 0.05f, my + s * 0.08f), 8f, 8f, paint)
         paint.color = 0xFF7EC8A3.toInt()
         canvas.drawRect(mx - s * 0.05f, my - s * 0.02f, mx + s * 0.05f, my + s * 0.08f, paint)
-        // Flame / power on the right
         paint.color = 0xFFFF8A50.toInt()
         val flame = Path().apply {
             moveTo(cx + dw * 0.48f, pigY + dh * 0.05f)
@@ -359,18 +387,17 @@ private class StageView(
             close()
         }
         canvas.drawPath(flame, paint)
-        // Fist rising
         paint.color = 0xFFFFE0B2.toInt()
         canvas.drawCircle(cx + dw * 0.05f + dw * 0.25f * e, pigY - dh * 0.05f, s * 0.05f, paint)
         drawSparkles(canvas, cx, pigY, s * 0.3f, e)
     }
 
     private fun drawSurplus(canvas: Canvas, cx: Float, cy: Float, s: Float, pigW: Float) {
-        val belly = 1f + 0.18f * ease(t)
+        val belly = 1f + 0.12f * ease(t)
         val pigY = cy + s * 0.06f
-        val size = drawPigSprite(
-            canvas, cx, pigY, pigW, R.drawable.pig_chubby,
-            scaleX = belly, scaleY = 1f + 0.08f * ease(t),
+        val size = drawPigFrame(
+            canvas, cx, pigY, pigW, PigSprites.LAND_SQUASH,
+            scaleX = belly, scaleY = 1f + 0.06f * ease(t),
         )
         val dh = size[1]
         text.textSize = 22f * resources.displayMetrics.scaledDensity
@@ -383,10 +410,9 @@ private class StageView(
 
     private fun drawFireworks(canvas: Canvas, cx: Float, cy: Float, s: Float, pigW: Float) {
         val pigY = cy + s * 0.08f
-        val size = drawPigSprite(canvas, cx, pigY, pigW, R.drawable.pig_normal)
+        val size = drawPigFrame(canvas, cx, pigY, pigW, PigSprites.BOUNCE_HAPPY)
         val dw = size[0]; val dh = size[1]
         val e = ease(t)
-        // Tiny crown settles on top of sticker head
         paint.style = Paint.Style.FILL
         paint.color = 0xFFFFD76A.toInt()
         val crownY = pigY - dh * 0.48f - (1f - e) * s * 0.2f
@@ -427,16 +453,14 @@ private class StageView(
         }
         val sx = if (phase == 0) 1.05f else 1f
         val sy = if (phase == 0) 0.95f else 1f
-        val size = drawPigSprite(
-            canvas, cx, pigY, pigW, R.drawable.pig_workout,
+        val size = drawPigFrame(
+            canvas, cx, pigY, pigW, PigSprites.LIFT_3,
             scaleX = sx, scaleY = sy, rotation = rot,
         )
         val dw = size[0]
-        // Soft spotlight under pig
         paint.style = Paint.Style.FILL
         paint.color = 0x33FFE8A0
         canvas.drawCircle(cx, cy + size[1] * 0.45f, s * 0.22f, paint)
-        // Tiny flex dots near shoulders (props, not a second body)
         paint.color = 0x66FFA8BE
         canvas.drawCircle(cx - dw * 0.48f, pigY, s * 0.035f, paint)
         canvas.drawCircle(cx + dw * 0.48f, pigY, s * 0.035f, paint)
@@ -446,8 +470,8 @@ private class StageView(
     private fun drawMorning(canvas: Canvas, cx: Float, cy: Float, s: Float, pigW: Float) {
         val stretch = 1f + 0.12f * sin(t * PI.toFloat())
         val pigY = cy + s * 0.05f
-        val res = if (t < 0.35f) R.drawable.pig_sleep else R.drawable.pig_normal
-        drawPigSprite(canvas, cx, pigY, pigW, res, scaleX = 1f, scaleY = stretch)
+        val frame = if (t < 0.35f) PigSprites.WALK_1 else PigSprites.BOUNCE_HAPPY
+        drawPigFrame(canvas, cx, pigY, pigW, frame, scaleX = 1f, scaleY = stretch)
         paint.style = Paint.Style.FILL
         paint.color = 0xFFFFE08A.toInt()
         canvas.drawCircle(cx + s * 0.28f, cy - s * 0.28f, s * 0.07f * ease(t), paint)

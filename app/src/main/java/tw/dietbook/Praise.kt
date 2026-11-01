@@ -65,7 +65,7 @@ object Praise {
         return if (streak >= 3 && Random.nextBoolean()) streakBoost.random().format(streak) + "\n" + base else base
     }
 
-    fun show(activity: Activity, message: String, pigRes: Int = R.drawable.pig_buff, onDone: (() -> Unit)? = null) {
+    fun show(activity: Activity, message: String, pigRes: Int = 0, onDone: (() -> Unit)? = null) {
         val dlg = Dialog(activity)
         dlg.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         val root = FrameLayout(activity).apply {
@@ -81,9 +81,12 @@ object Praise {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { gravity = Gravity.CENTER }
         }
+        val stage = CuteFx.currentStage(activity)
         val pig = ImageView(activity).apply {
-            setImageResource(pigRes)
+            if (pigRes != 0) setImageResource(pigRes)
+            else setImageBitmap(PigSprites.get(activity, stage, PigSprites.BOUNCE_HAPPY))
             adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
             layoutParams = LinearLayout.LayoutParams(activity.dp(180f), activity.dp(180f)).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
             }
