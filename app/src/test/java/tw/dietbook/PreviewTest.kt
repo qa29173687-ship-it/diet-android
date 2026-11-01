@@ -30,6 +30,11 @@ class PreviewTest {
             View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY),
         )
         v.layout(0, 0, w, h)
+        // advance pig wander a bit
+        repeat(8) {
+            ShadowLooper.idleMainLooper()
+            Thread.sleep(40)
+        }
         val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         v.draw(Canvas(b))
         File(out, "$name.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -41,6 +46,8 @@ class PreviewTest {
         activity = "moderate", goalKcal = 2200.0, goalProtein = 110.0,
         balance = balance, lastFinalizedDay = Days.yesterdayOf(Days.today()),
         paybackDays = 7, hcEnabled = false, remindPayback = false,
+        streakDays = 4, lastActiveDay = Days.yesterdayOf(Days.today()),
+        badges = setOf("first_cardio", "streak3"),
     )
 
     private fun seedLogs() {
@@ -55,12 +62,10 @@ class PreviewTest {
             )
         )
         Store.setDataMeta(
-            c,
-            tfndVer = "bundled",
-            traceVer = "bundled-v1",
-            lastChecked = System.currentTimeMillis() - 3600_000,
-            lastUpdated = 0L,
+            c, tfndVer = "bundled", traceVer = "bundled-v1",
+            lastChecked = System.currentTimeMillis() - 3600_000, lastUpdated = 0L,
         )
+        Store.touchFeed(c)
         val day = Days.today()
         Store.saveLogs(
             c, day,
@@ -70,25 +75,37 @@ class PreviewTest {
                 FoodLog(3, day, "tfnd:demo2", "雞蛋", 50.0, 72.0, 6.3, System.currentTimeMillis() - 600_000),
             )
         )
+        Store.saveCardio(
+            c, day,
+            listOf(CardioLog(1, day, "walking", "走路", 40, 180.0, 3.5, System.currentTimeMillis() - 900_000))
+        )
+        Store.saveStrength(
+            c, day,
+            listOf(StrengthLog(1, day, "手臂", "二頭彎舉", 3, 25, 120.0, System.currentTimeMillis() - 500_000))
+        )
+        Store.addPartMinutes(c, "手臂", 40)
+        Store.addPartMinutes(c, "胸", 20)
+        Store.addPartMinutes(c, "腹", 50)
+        Store.addPartMinutes(c, "腿", 30)
     }
 
     private fun homeShot(liveBalance: Double, name: String) {
         val c = RuntimeEnvironment.getApplication()
-        // Make today's net ≈ 0 so the pig reflects liveBalance cleanly
         val day = Days.today()
         val tdee = Calc.tdee(1680.0, "moderate")
         Store.saveProfile(c, baseProfile(liveBalance))
         Store.setDataMeta(c, tfndVer = "bundled", traceVer = "bundled-v1",
             lastChecked = System.currentTimeMillis() - 3600_000, lastUpdated = 0L)
+        Store.touchFeed(c)
         Store.saveLogs(
             c, day,
-            listOf(
-                FoodLog(1, day, "tfnd:fill", "維持熱量（預覽）", 100.0, tdee, 20.0, System.currentTimeMillis()),
-            )
+            listOf(FoodLog(1, day, "tfnd:fill", "維持熱量（預覽）", 100.0, tdee, 20.0, System.currentTimeMillis())),
         )
+        Store.saveCardio(c, day, emptyList())
+        Store.saveStrength(c, day, emptyList())
         val main = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         ShadowLooper.idleMainLooper()
-        Thread.sleep(350)
+        Thread.sleep(400)
         ShadowLooper.idleMainLooper()
         shot(main, name)
         main.finish()
@@ -96,7 +113,6 @@ class PreviewTest {
     }
 
     @Test fun render() {
-        // Fat / normal / buff home variants (cumulative balance drives pig)
         homeShot(4800.0, "1a-主畫面-胖豬")
         homeShot(0.0, "1b-主畫面-普通豬")
         homeShot(-4800.0, "1c-主畫面-壯豬")
@@ -106,44 +122,30 @@ class PreviewTest {
         Store.saveProfile(c, baseProfile(1850.0))
         seedLogs()
 
-        val search = Robolectric.buildActivity(SearchActivity::class.java).setup().get()
-        shot(search, "2-搜尋")
+        val cardio = Robolectric.buildActivity(CardioActivity::class.java).setup().get()
+        shot(cardio, "2-運動")
+        cardio.finish()
 
-        val custom = Robolectric.buildActivity(CustomFoodActivity::class.java).setup().get()
-        shot(custom, "3-自訂食物")
+        val strength = Robolectric.buildActivity(StrengthActivity::class.java).setup().get()
+        shot(strength, "3-鍛鍊")
+        strength.finish()
+
+        val search = Robolectric.buildActivity(SearchActivity::class.java).setup().get()
+        shot(search, "4-搜尋吃")
+        search.finish()
 
         val bal = Robolectric.buildActivity(BalanceActivity::class.java).setup().get()
         Thread.sleep(250); ShadowLooper.idleMainLooper()
-        shot(bal, "4-小豬存摺")
+        shot(bal, "5-小豬存摺")
+        bal.finish()
 
         val settings = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
         Thread.sleep(100); ShadowLooper.idleMainLooper()
-        shot(settings, "5-設定")
+        shot(settings, "6-設定")
+        settings.finish()
 
         val setup = Robolectric.buildActivity(SetupActivity::class.java).setup().get()
-        shot(setup, "6-首次設定")
-
-        val log = Robolectric.buildActivity(
-            LogActivity::class.java,
-            Intent(c, LogActivity::class.java).putExtra("foodId", "custom:preview"),
-        ).setup().get()
-        shot(log, "7-記錄份量")
-
-        val confirm = Robolectric.buildActivity(
-            CustomFoodActivity::class.java,
-            Intent(c, CustomFoodActivity::class.java)
-                .putExtra("confirmBarcode", true)
-                .putExtra("barcode", "3017620422003")
-                .putExtra("prefillName", "Nutella")
-                .putExtra("prefillSource", "Open Food Facts")
-                .putExtra("basis", "per100")
-                .putExtra("kcalPer100", 539.0)
-                .putExtra("proteinPer100", 6.3)
-                .putExtra("note", "來源：Open Food Facts"),
-        ).setup().get()
-        shot(confirm, "8-條碼確認")
-
-        val barcode = Robolectric.buildActivity(BarcodeScanActivity::class.java).setup().get()
-        shot(barcode, "9-掃條碼")
+        shot(setup, "7-首次設定")
+        setup.finish()
     }
 }

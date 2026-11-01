@@ -7,7 +7,9 @@ import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,10 +19,18 @@ import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
+/**
+ * 電子雞首頁：場地裡只有小豬遊走，底部三大鍵「吃／運動／鍛鍊」。
+ */
 class MainActivity : AppCompatActivity() {
-    private lateinit var body: LinearLayout
+    private lateinit var rootPad: LinearLayout
+    private lateinit var arena: FrameLayout
+    private lateinit var pig: PigMascotView
+    private lateinit var balLabel: TextView
+    private lateinit var balValue: TextView
+    private lateinit var vitalsRow: LinearLayout
+    private lateinit var hint: TextView
     private var healthMsg = ""
-    private var pig: PigMascotView? = null
 
     private val hcPerms = registerForActivityResult(
         PermissionController.createRequestPermissionResultContract()
@@ -41,14 +51,116 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SetupActivity::class.java))
             finish(); return
         }
-        val (root, b) = col(this)
-        body = b
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(C.bg)
+        }
+        rootPad = root
         setContentView(root)
         EdgeInsets.pad(root, ime = false)
+
+        // top bar: balance + settings
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16f), dp(8f), dp(12f), dp(4f))
+        }
+        val balCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        balLabel = label(this, "存錢筒", 12f)
+        balValue = value(this, "—", 22f, C.text)
+        balCol.addView(balLabel)
+        balCol.addView(balValue)
+        balCol.setOnClickListener { startActivity(Intent(this, BalanceActivity::class.java)) }
+        top.addView(balCol)
+        top.addView(secondaryBtn(this, "設定") {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(dp(88f), dp(40f))
+        })
+        root.addView(top)
+
+        // vitals
+        vitalsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(16f), 0, dp(16f), dp(4f))
+        }
+        root.addView(vitalsRow)
+
+        // arena — pig wanders here; weight 1 so buttons stay visible
+        arena = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+            )
+            setBackgroundColor(0xFFFFF0F5.toInt())
+        }
+        pig = PigMascotView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        arena.addView(pig)
+        hint = label(this, "點小豬會理你｜長按下方按鈕看說明", 11f, C.muted).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.BOTTOM
+                bottomMargin = dp(6f)
+            }
+        }
+        arena.addView(hint)
+        root.addView(arena)
+
+        // three big buttons — never covered by pig (outside arena)
+        val btns = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(12f), dp(8f), dp(12f), dp(12f))
+            setBackgroundColor(C.bg)
+        }
+        fun big(emoji: String, title: String, sub: String, onClick: () -> Unit): LinearLayout {
+            val b = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                background = roundBg(C.card, 22f, this).also { it.setStroke(dp(2f), C.line) }
+                setPadding(dp(6f), dp(14f), dp(6f), dp(14f))
+                layoutParams = LinearLayout.LayoutParams(0, dp(96f), 1f).apply {
+                    marginStart = dp(4f); marginEnd = dp(4f)
+                }
+                isClickable = true; isFocusable = true
+                setOnClickListener { onClick() }
+            }
+            b.addView(TextView(this).apply {
+                text = emoji; textSize = 26f; gravity = Gravity.CENTER
+            })
+            b.addView(TextView(this).apply {
+                text = title; setTextColor(C.text); textSize = 16f
+                gravity = Gravity.CENTER; paint.isFakeBoldText = true
+            })
+            b.addView(TextView(this).apply {
+                text = sub; setTextColor(C.muted); textSize = 11f; gravity = Gravity.CENTER
+            })
+            return b
+        }
+        btns.addView(big("🍙", "吃", "記飲食") {
+            startActivity(Intent(this, SearchActivity::class.java))
+        })
+        btns.addView(big("🏃", "運動", "有氧") {
+            startActivity(Intent(this, CardioActivity::class.java))
+        })
+        btns.addView(big("🏋️", "鍛鍊", "重訓部位") {
+            startActivity(Intent(this, StrengthActivity::class.java))
+        })
+        root.addView(btns)
+
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
         maybeAskHealth()
+        Notify.scheduleHungryCheck(this)
     }
 
     override fun onResume() {
@@ -84,138 +196,64 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this@MainActivity, "更新失敗：${e.message}", Toast.LENGTH_SHORT).show()
                 val p = Store.profile(this@MainActivity)
                 val (k, pr) = Store.dayTotals(this@MainActivity, Days.today())
-                p to DaySnapshot(Days.today(), k, pr, p.bmr, null, Calc.tdee(p.bmr, p.activity), Calc.dayNet(k, p.bmr, null, Calc.tdee(p.bmr, p.activity)))
+                p to DaySnapshot(
+                    Days.today(), k, pr, p.bmr, null, Calc.tdee(p.bmr, p.activity),
+                    Calc.dayNet(k, p.bmr, null, Calc.tdee(p.bmr, p.activity))
+                )
             }
             render(u, snap)
         }
     }
 
     private fun render(u: UserProfile, snap: DaySnapshot) {
-        body.removeAllViews()
-        body.addView(titleBar(this, "熱量存錢筒", Days.label(snap.day)))
+        val live = u.balance + snap.net
+        val (headline, amount) = BankCopy.headline(live)
+        balLabel.text = headline
+        balValue.text = amount
+        balValue.setTextColor(BankCopy.color(live))
 
-        // —— Hero: pig + big balance ——
-        val hero = card(this)
-        hero.gravity = Gravity.CENTER_HORIZONTAL
-        val pigView = PigMascotView(this).also { pig = it }
-        pigView.layoutParams = LinearLayout.LayoutParams(dp(260f), dp(240f)).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-        }
-        // Include today's unsettled net so pig reacts live
-        val liveBalance = u.balance + snap.net
-        pigView.setBalance(liveBalance, animate = true)
-        hero.addView(pigView)
-
-        val (headline, amount) = BankCopy.headline(liveBalance)
-        hero.addView(label(this, headline, 14f, C.muted).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(0, dp(4f), 0, 0)
-        })
-        hero.addView(value(this, amount, 36f, BankCopy.color(liveBalance)).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-        })
-        hero.addView(label(this, BankCopy.tip(liveBalance), 13f, C.text).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(8f), dp(4f), dp(8f), 0)
-        })
-        hero.addView(label(this, "含今日尚未入帳淨值；點此看存摺與還款計畫", 11f, C.muted).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-        })
-        hero.setOnClickListener { startActivity(Intent(this, BalanceActivity::class.java)) }
-        body.addView(hero)
-
-        // —— Today intake ——
-        val goal = card(this)
-        goal.addView(label(this, "今日放進肚子裡的", 12f))
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            addView(value(this@MainActivity, "${Calc.r0(snap.intakeKcal)}", 24f, C.primary))
-            addView(label(this@MainActivity, "／ ${Calc.r0(u.goalKcal)} kcal"))
-            addView(progress(this@MainActivity, ((snap.intakeKcal / u.goalKcal.coerceAtLeast(1.0)) * 100).toInt()))
-        })
-        row.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            addView(value(this@MainActivity, "${Calc.r1(snap.protein)}", 24f, C.warn))
-            addView(label(this@MainActivity, "／ ${Calc.r0(u.goalProtein)} g 蛋白"))
-            addView(progress(this@MainActivity, ((snap.protein / u.goalProtein.coerceAtLeast(1.0)) * 100).toInt(), C.warn))
-        })
-        goal.addView(row)
-        body.addView(goal)
-
-        // —— Today net ——
-        val netCard = card(this)
-        val mode = if (snap.activeBurn != null) "攝取 − BMR − 活動（Health Connect）"
-        else "攝取 − TDEE（${Calc.activityLabel(u.activity)}）"
-        netCard.addView(label(this, "今日淨值（明天會存進撲滿）", 12f))
-        val netColor = if (snap.net > 0) C.danger else if (snap.net < 0) C.mint else C.text
-        val netLabel = when {
-            snap.net > 0 -> "進帳 +${Calc.r0(snap.net)} kcal"
-            snap.net < 0 -> "存款 +${Calc.r0(-snap.net)} kcal"
-            else -> "打平 0 kcal"
-        }
-        netCard.addView(value(this, netLabel, 24f, netColor))
-        netCard.addView(label(this, mode))
-        val detail = buildString {
-            append("攝取 ${Calc.r0(snap.intakeKcal)} − BMR ${Calc.r0(snap.bmr)}")
-            if (snap.activeBurn != null) append(" − 活動 ${Calc.r0(snap.activeBurn)}")
-            else append("（TDEE ${Calc.r0(snap.tdeeFallback)}）")
-            snap.steps?.let { append("　步數 $it") }
-        }
-        netCard.addView(label(this, detail, 12f, C.muted))
-        if (healthMsg.isNotEmpty()) netCard.addView(label(this, healthMsg, 12f, C.warn))
-        if (u.balance > 50) {
-            val per = Calc.paybackPerDay(u.balance, u.paybackDays.coerceAtLeast(1))
-            netCard.addView(label(this, "還款小提醒：${u.paybackDays} 天打平 → 每天約再少 ${Calc.r0(per)} kcal", 12f, C.warn))
-        }
-        body.addView(netCard)
-
-        body.addView(primaryBtn(this, "＋ 記一筆飲食") {
-            startActivity(Intent(this, SearchActivity::class.java))
-        })
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        fun chip(t: String, act: () -> Unit) = secondaryBtn(this, t, act).also {
-            it.layoutParams = LinearLayout.LayoutParams(0, dp(48f), 1f).apply {
-                marginStart = dp(2f); marginEnd = dp(2f)
-            }
-            actions.addView(it)
-        }
-        chip("條碼") { startActivity(Intent(this, BarcodeScanActivity::class.java)) }
-        chip("標示／自訂") { startActivity(Intent(this, CustomFoodActivity::class.java)) }
-        chip("存摺") { startActivity(Intent(this, BalanceActivity::class.java)) }
-        chip("設定") { startActivity(Intent(this, SettingsActivity::class.java)) }
-        body.addView(actions)
-
-        body.addView(label(this, "今日紀錄", 15f, C.text).apply {
-            setPadding(0, dp(12f), 0, dp(6f)); paint.isFakeBoldText = true
-        })
-        val logs = Store.logs(this, snap.day)
-        if (logs.isEmpty()) {
-            body.addView(label(this, "還沒有紀錄。點上面幫小豬記一筆吧～", 14f))
-        } else {
-            logs.forEach { log ->
-                val rowL = card(this).apply {
-                    setPadding(dp(12f), dp(10f), dp(12f), dp(10f))
-                    (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(8f)
+        val vitals = PigStats.compute(this, u, snap)
+        vitalsRow.removeAllViews()
+        fun bar(name: String, v: Int, color: Int) {
+            val col = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = dp(6f)
                 }
-                rowL.addView(TextView(this).apply {
-                    text = log.foodName; setTextColor(C.text); textSize = 16f; paint.isFakeBoldText = true
-                })
-                rowL.addView(label(this, "${Calc.r0(log.grams)} g　${Calc.r0(log.kcal)} kcal　蛋白 ${Calc.r1(log.protein)} g"))
-                rowL.setOnLongClickListener {
-                    Store.deleteLog(this, log.day, log.id)
-                    Toast.makeText(this, "已刪除", Toast.LENGTH_SHORT).show()
-                    refresh(); true
-                }
-                body.addView(rowL)
             }
-            body.addView(label(this, "長按可刪除單筆", 12f))
+            col.addView(label(this, "$name $v", 11f))
+            col.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+                max = 100; progress = v.coerceIn(0, 100)
+                progressTintList = android.content.res.ColorStateList.valueOf(color)
+                progressBackgroundTintList = android.content.res.ColorStateList.valueOf(C.line)
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(8f))
+            })
+            vitalsRow.addView(col)
+        }
+        bar("飽足", vitals.satiety, C.primary)
+        bar("心情", vitals.mood, C.warn)
+        bar("體力", vitals.energy, C.mint)
+
+        pig.setBalance(live, animate = true)
+        pig.setPartLevels(Store.partLevels(this))
+        pig.setVitals(vitals)
+        when {
+            vitals.satiety < 28 -> pig.setMoodOverride(PigMood.HUNGRY)
+            PigStats.isNight() && vitals.energy < 50 -> pig.setMoodOverride(PigMood.SLEEP)
+            else -> pig.setMoodOverride(null)
         }
 
-        body.addView(label(this, Tfnd.ATTRIBUTION, 11f, C.muted).apply {
-            setPadding(0, dp(16f), 0, dp(8f))
-        })
+        val burnNote = when (snap.burnSource) {
+            "manual" -> "活動：手動運動 ${Calc.r0(snap.manualBurn)} kcal（優先於健康資料）"
+            "health_connect" -> "活動：Health Connect ${Calc.r0(snap.activeBurn ?: 0.0)} kcal"
+            else -> "活動：以 TDEE 估算"
+        }
+        hint.text = buildString {
+            append(BankCopy.tip(live))
+            append("｜")
+            append(burnNote)
+            if (u.streakDays > 0) append("｜連續 ${u.streakDays} 天")
+            if (healthMsg.isNotEmpty()) append("｜").append(healthMsg)
+        }
     }
 }

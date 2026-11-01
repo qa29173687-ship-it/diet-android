@@ -1,17 +1,15 @@
 package tw.dietbook
 
 import android.content.Context
-import java.time.LocalDate
 
 /**
  * 累計熱量帳戶：每日淨值持續疊加，不週清。
- * 切到新的一天時，把「昨天」定案並加進 balance。
+ * 活動消耗：有手動運動／鍛鍊時以手動為準，否則用 Health Connect，避免重複計算。
  */
 object Balance {
     suspend fun refresh(ctx: Context, hc: HealthDay? = null): Pair<UserProfile, DaySnapshot> {
         val today = Days.today()
         var u = Store.profile(ctx)
-        // Finalize any missing days between lastFinalized and yesterday
         if (u.setupDone) {
             u = finalizeCatchUp(ctx, u, today)
         }
@@ -19,9 +17,15 @@ object Balance {
             HealthDay(null, null, null, false, false, "")
         val (intake, protein) = Store.dayTotals(ctx, today)
         val tdee = Calc.tdee(u.bmr, u.activity)
-        val active = health.activeKcal
+        val manual = Store.manualBurn(ctx, today)
+        val hcBurn = health.activeKcal
+        val active = Calc.effectiveActive(manual, hcBurn)
+        val burnSource = when {
+            manual > 0.5 -> "manual"
+            active != null -> "health_connect"
+            else -> "tdee"
+        }
         val net = Calc.dayNet(intake, u.bmr, active, tdee)
-        // Optional: update weight from HC into profile (display only unless user saves)
         val snap = DaySnapshot(
             day = today,
             intakeKcal = intake,
@@ -33,6 +37,9 @@ object Balance {
             steps = health.steps,
             weightKg = health.weightKg ?: u.weightKg,
             finalized = false,
+            manualBurn = manual,
+            hcBurn = hcBurn,
+            burnSource = burnSource,
         )
         Store.saveSnapshot(ctx, snap)
         return u to snap
@@ -42,7 +49,6 @@ object Balance {
         var u = profile
         val last = u.lastFinalizedDay
         val start = if (last.isEmpty()) {
-            // first time: don't backfill ancient history; start from yesterday only if logs exist
             Days.parse(today).minusDays(1)
         } else {
             Days.parse(last).plusDays(1)
@@ -57,10 +63,20 @@ object Balance {
             val snap = if (existing != null && existing.finalized) existing else {
                 val (intake, protein) = Store.dayTotals(ctx, day)
                 val tdee = Calc.tdee(u.bmr, u.activity)
-                // 過去日若無 HC 快照，用 TDEE 回退
-                val active = existing?.activeBurn
+                val manual = Store.manualBurn(ctx, day)
+                val hc = existing?.hcBurn ?: existing?.activeBurn
+                val active = Calc.effectiveActive(manual, hc)
                 val net = Calc.dayNet(intake, u.bmr, active, tdee)
-                DaySnapshot(day, intake, protein, u.bmr, active, tdee, net, existing?.steps, existing?.weightKg, true)
+                DaySnapshot(
+                    day, intake, protein, u.bmr, active, tdee, net,
+                    existing?.steps, existing?.weightKg, true,
+                    manual, hc,
+                    when {
+                        manual > 0.5 -> "manual"
+                        active != null -> "health_connect"
+                        else -> "tdee"
+                    },
+                )
             }
             val finalized = snap.copy(finalized = true)
             if (existing?.finalized != true) {

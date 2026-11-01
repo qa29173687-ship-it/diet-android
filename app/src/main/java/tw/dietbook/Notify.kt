@@ -14,13 +14,18 @@ import java.util.Calendar
 
 object Notify {
     const val CH = "payback"
+    const val CH_PET = "piggy"
     const val ID = 42
+    const val ID_HUNGRY = 43
 
     fun ensureChannel(ctx: Context) {
         if (Build.VERSION.SDK_INT >= 26) {
             val nm = ctx.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(
                 NotificationChannel(CH, "存錢筒提醒", NotificationManager.IMPORTANCE_DEFAULT)
+            )
+            nm.createNotificationChannel(
+                NotificationChannel(CH_PET, "小豬動態", NotificationManager.IMPORTANCE_DEFAULT)
             )
         }
     }
@@ -47,6 +52,24 @@ object Notify {
         }
     }
 
+    fun scheduleHungryCheck(ctx: Context) {
+        ensureChannel(ctx)
+        val am = ctx.getSystemService(AlarmManager::class.java)
+        val pi = PendingIntent.getBroadcast(
+            ctx, 2, Intent(ctx, HungryReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val cal = Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Taipei")).apply {
+            add(Calendar.HOUR_OF_DAY, 3)
+            set(Calendar.SECOND, 0)
+        }
+        try {
+            am.setRepeating(AlarmManager.RTC_WAKEUP, cal.timeInMillis, AlarmManager.INTERVAL_HOUR * 3, pi)
+        } catch (_: Exception) {
+            try { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi) } catch (_: Exception) {}
+        }
+    }
+
     fun showPayback(ctx: Context) {
         ensureChannel(ctx)
         val u = Store.profile(ctx)
@@ -68,6 +91,23 @@ object Notify {
             .build()
         try { NotificationManagerCompat.from(ctx).notify(ID, n) } catch (_: SecurityException) {}
     }
+
+    fun showHungry(ctx: Context) {
+        ensureChannel(ctx)
+        if (!Store.profile(ctx).setupDone) return
+        val open = PendingIntent.getActivity(
+            ctx, 0, Intent(ctx, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val n = NotificationCompat.Builder(ctx, CH_PET)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("小豬肚子餓了…")
+            .setContentText("好久沒記飲食，點「吃」餵一下小豬吧～")
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        try { NotificationManagerCompat.from(ctx).notify(ID_HUNGRY, n) } catch (_: SecurityException) {}
+    }
 }
 
 class ReminderReceiver : BroadcastReceiver() {
@@ -77,8 +117,24 @@ class ReminderReceiver : BroadcastReceiver() {
     }
 }
 
+class HungryReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        val last = Store.lastFeedAt(context)
+        val hours = if (last <= 0L) 99.0 else (System.currentTimeMillis() - last) / 3600000.0
+        if (hours >= 7) {
+            val lastN = Store.lastHungryNotifyAt(context)
+            if (System.currentTimeMillis() - lastN > 12 * 3600_000L) {
+                Notify.showHungry(context)
+                Store.setHungryNotifyAt(context, System.currentTimeMillis())
+            }
+        }
+        Notify.scheduleHungryCheck(context)
+    }
+}
+
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (Store.profile(context).remindPayback) Notify.scheduleDaily(context, true)
+        if (Store.profile(context).setupDone) Notify.scheduleHungryCheck(context)
     }
 }

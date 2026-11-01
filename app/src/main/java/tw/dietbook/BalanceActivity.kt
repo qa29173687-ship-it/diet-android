@@ -50,8 +50,12 @@ class BalanceActivity : AppCompatActivity() {
             else -> "打平 0 kcal"
         }
         today.addView(value(this, todayTxt, 24f, BankCopy.color(snap.net)))
-        today.addView(label(this, "攝取 ${Calc.r0(snap.intakeKcal)}、BMR ${Calc.r0(snap.bmr)}、" +
-            if (snap.activeBurn != null) "活動 ${Calc.r0(snap.activeBurn)}" else "TDEE ${Calc.r0(snap.tdeeFallback)}"))
+        val burnTxt = when (snap.burnSource) {
+            "manual" -> "手動活動 ${Calc.r0(snap.manualBurn)}"
+            "health_connect" -> "HC 活動 ${Calc.r0(snap.activeBurn ?: 0.0)}"
+            else -> if (snap.activeBurn != null) "活動 ${Calc.r0(snap.activeBurn)}" else "TDEE ${Calc.r0(snap.tdeeFallback)}"
+        }
+        today.addView(label(this, "攝取 ${Calc.r0(snap.intakeKcal)}、BMR ${Calc.r0(snap.bmr)}、$burnTxt"))
         body.addView(today)
 
         if (u.balance > 50) {

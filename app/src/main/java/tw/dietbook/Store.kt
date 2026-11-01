@@ -10,6 +10,8 @@ object Store {
 
     fun profile(ctx: Context): UserProfile {
         val s = p(ctx)
+        val badgesRaw = s.getString("badges", "") ?: ""
+        val badges = badgesRaw.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         return UserProfile(
             setupDone = s.getBoolean("setupDone", false),
             sex = s.getString("sex", "male") ?: "male",
@@ -26,6 +28,9 @@ object Store {
             remindPayback = s.getBoolean("remindPayback", false),
             paybackDays = s.getInt("paybackDays", 7),
             hcEnabled = s.getBoolean("hcEnabled", true),
+            streakDays = s.getInt("streakDays", 0),
+            lastActiveDay = s.getString("lastActiveDay", "") ?: "",
+            badges = badges,
         )
     }
 
@@ -46,6 +51,9 @@ object Store {
             .putBoolean("remindPayback", u.remindPayback)
             .putInt("paybackDays", u.paybackDays)
             .putBoolean("hcEnabled", u.hcEnabled)
+            .putInt("streakDays", u.streakDays)
+            .putString("lastActiveDay", u.lastActiveDay)
+            .putString("badges", u.badges.joinToString(","))
             .apply()
     }
 
@@ -94,7 +102,6 @@ object Store {
         val list = customFoods(ctx)
         val i = list.indexOfFirst { it.id == food.id }
         if (i >= 0) list[i] = food else list.add(0, food)
-        // 同一條碼只保留最新一筆綁定
         if (food.barcode.isNotBlank()) {
             val bc = food.barcode
             val cleaned = list.map { if (it.id != food.id && it.barcode == bc) it.copy(barcode = "") else it }
@@ -128,14 +135,9 @@ object Store {
             val o = arr.getJSONObject(i)
             list.add(
                 FoodLog(
-                    id = o.getLong("id"),
-                    day = o.getString("day"),
-                    foodId = o.getString("foodId"),
-                    foodName = o.getString("foodName"),
-                    grams = o.getDouble("grams"),
-                    kcal = o.getDouble("kcal"),
-                    protein = o.getDouble("protein"),
-                    at = o.getLong("at"),
+                    id = o.getLong("id"), day = o.getString("day"), foodId = o.getString("foodId"),
+                    foodName = o.getString("foodName"), grams = o.getDouble("grams"),
+                    kcal = o.getDouble("kcal"), protein = o.getDouble("protein"), at = o.getLong("at"),
                 )
             )
         }
@@ -158,6 +160,8 @@ object Store {
         val list = logs(ctx, log.day).toMutableList()
         list.add(0, log)
         saveLogs(ctx, log.day, list)
+        touchFeed(ctx)
+        bumpStreak(ctx)
     }
 
     fun deleteLog(ctx: Context, day: String, id: Long) {
@@ -165,9 +169,153 @@ object Store {
     }
 
     fun dayTotals(ctx: Context, day: String): Pair<Double, Double> {
-        var k = 0.0; var p = 0.0
-        logs(ctx, day).forEach { k += it.kcal; p += it.protein }
-        return k to p
+        var k = 0.0; var pr = 0.0
+        logs(ctx, day).forEach { k += it.kcal; pr += it.protein }
+        return k to pr
+    }
+
+    // ---- cardio ----
+    fun cardioLogs(ctx: Context, day: String): List<CardioLog> {
+        val raw = p(ctx).getString("cardio_$day", "[]") ?: "[]"
+        val arr = JSONArray(raw)
+        val list = ArrayList<CardioLog>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            list.add(
+                CardioLog(
+                    id = o.getLong("id"), day = o.getString("day"), type = o.getString("type"),
+                    label = o.getString("label"), minutes = o.getInt("minutes"),
+                    kcal = o.getDouble("kcal"), met = o.getDouble("met"), at = o.getLong("at"),
+                )
+            )
+        }
+        return list.sortedByDescending { it.at }
+    }
+
+    fun saveCardio(ctx: Context, day: String, list: List<CardioLog>) {
+        val arr = JSONArray()
+        list.forEach { l ->
+            arr.put(JSONObject().apply {
+                put("id", l.id); put("day", l.day); put("type", l.type); put("label", l.label)
+                put("minutes", l.minutes); put("kcal", l.kcal); put("met", l.met); put("at", l.at)
+            })
+        }
+        p(ctx).edit().putString("cardio_$day", arr.toString()).apply()
+    }
+
+    fun addCardio(ctx: Context, log: CardioLog) {
+        val list = cardioLogs(ctx, log.day).toMutableList()
+        list.add(0, log)
+        saveCardio(ctx, log.day, list)
+        bumpStreak(ctx)
+    }
+
+    fun deleteCardio(ctx: Context, day: String, id: Long) {
+        saveCardio(ctx, day, cardioLogs(ctx, day).filter { it.id != id })
+    }
+
+    fun cardioKcal(ctx: Context, day: String): Double =
+        cardioLogs(ctx, day).sumOf { it.kcal }
+
+    // ---- strength ----
+    fun strengthLogs(ctx: Context, day: String): List<StrengthLog> {
+        val raw = p(ctx).getString("strength_$day", "[]") ?: "[]"
+        val arr = JSONArray(raw)
+        val list = ArrayList<StrengthLog>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            list.add(
+                StrengthLog(
+                    id = o.getLong("id"), day = o.getString("day"), part = o.getString("part"),
+                    exercise = o.getString("exercise"), sets = o.getInt("sets"),
+                    minutes = o.getInt("minutes"), kcal = o.getDouble("kcal"), at = o.getLong("at"),
+                )
+            )
+        }
+        return list.sortedByDescending { it.at }
+    }
+
+    fun saveStrength(ctx: Context, day: String, list: List<StrengthLog>) {
+        val arr = JSONArray()
+        list.forEach { l ->
+            arr.put(JSONObject().apply {
+                put("id", l.id); put("day", l.day); put("part", l.part); put("exercise", l.exercise)
+                put("sets", l.sets); put("minutes", l.minutes); put("kcal", l.kcal); put("at", l.at)
+            })
+        }
+        p(ctx).edit().putString("strength_$day", arr.toString()).apply()
+    }
+
+    fun addStrength(ctx: Context, log: StrengthLog) {
+        val list = strengthLogs(ctx, log.day).toMutableList()
+        list.add(0, log)
+        saveStrength(ctx, log.day, list)
+        addPartMinutes(ctx, log.part, log.minutes)
+        bumpStreak(ctx)
+    }
+
+    fun deleteStrength(ctx: Context, day: String, id: Long) {
+        // 不回溯部位分鐘，避免刪除造成負數；以累計為主
+        saveStrength(ctx, day, strengthLogs(ctx, day).filter { it.id != id })
+    }
+
+    fun strengthKcal(ctx: Context, day: String): Double =
+        strengthLogs(ctx, day).sumOf { it.kcal }
+
+    fun manualBurn(ctx: Context, day: String): Double =
+        cardioKcal(ctx, day) + strengthKcal(ctx, day)
+
+    fun partMinutes(ctx: Context): Map<String, Int> {
+        val raw = p(ctx).getString("partMinutes", "{}") ?: "{}"
+        val o = JSONObject(raw)
+        val map = linkedMapOf<String, Int>()
+        Calc.STRENGTH_PARTS.forEach { part ->
+            map[part] = o.optInt(part, 0)
+        }
+        return map
+    }
+
+    fun addPartMinutes(ctx: Context, part: String, minutes: Int) {
+        val map = partMinutes(ctx).toMutableMap()
+        map[part] = (map[part] ?: 0) + minutes.coerceAtLeast(0)
+        val o = JSONObject()
+        map.forEach { (k, v) -> o.put(k, v) }
+        p(ctx).edit().putString("partMinutes", o.toString()).apply()
+    }
+
+    fun partLevels(ctx: Context): Map<String, Int> =
+        partMinutes(ctx).mapValues { Calc.partLevel(it.value) }
+
+    // ---- vitals / feed ----
+    fun lastFeedAt(ctx: Context): Long = p(ctx).getLong("lastFeedAt", 0L)
+
+    fun touchFeed(ctx: Context) {
+        p(ctx).edit().putLong("lastFeedAt", System.currentTimeMillis()).apply()
+    }
+
+    fun lastHungryNotifyAt(ctx: Context): Long = p(ctx).getLong("lastHungryNotifyAt", 0L)
+
+    fun setHungryNotifyAt(ctx: Context, t: Long) {
+        p(ctx).edit().putLong("lastHungryNotifyAt", t).apply()
+    }
+
+    fun bumpStreak(ctx: Context) {
+        val u = profile(ctx)
+        val today = Days.today()
+        if (u.lastActiveDay == today) return
+        val yesterday = Days.yesterdayOf(today)
+        val next = if (u.lastActiveDay == yesterday) u.streakDays + 1 else 1
+        val badges = u.badges.toMutableSet()
+        if (next >= 3) badges += "streak3"
+        if (next >= 7) badges += "streak7"
+        if (next >= 14) badges += "streak14"
+        saveProfile(ctx, u.copy(streakDays = next, lastActiveDay = today, badges = badges))
+    }
+
+    fun awardBadge(ctx: Context, id: String) {
+        val u = profile(ctx)
+        if (id in u.badges) return
+        saveProfile(ctx, u.copy(badges = u.badges + id))
     }
 
     fun snapshot(ctx: Context, day: String): DaySnapshot? {
@@ -184,6 +332,9 @@ object Store {
             steps = if (o.has("steps") && !o.isNull("steps")) o.getLong("steps") else null,
             weightKg = if (o.has("weightKg") && !o.isNull("weightKg")) o.getDouble("weightKg") else null,
             finalized = o.optBoolean("finalized", false),
+            manualBurn = o.optDouble("manualBurn", 0.0),
+            hcBurn = if (o.has("hcBurn") && !o.isNull("hcBurn")) o.getDouble("hcBurn") else null,
+            burnSource = o.optString("burnSource", ""),
         )
     }
 
@@ -196,11 +347,13 @@ object Store {
             if (s.steps == null) put("steps", JSONObject.NULL) else put("steps", s.steps)
             if (s.weightKg == null) put("weightKg", JSONObject.NULL) else put("weightKg", s.weightKg)
             put("finalized", s.finalized)
+            put("manualBurn", s.manualBurn)
+            if (s.hcBurn == null) put("hcBurn", JSONObject.NULL) else put("hcBurn", s.hcBurn)
+            put("burnSource", s.burnSource)
         }
         p(ctx).edit().putString("snap_${s.day}", o.toString()).apply()
     }
 
-    // ---- data update meta ----
     fun dataTfndVersion(ctx: Context): String =
         p(ctx).getString("data_tfnd_ver", "bundled") ?: "bundled"
 

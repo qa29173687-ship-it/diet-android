@@ -2,124 +2,451 @@ package tw.dietbook
 
 import android.animation.ValueAnimator
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.util.AttributeSet
+import android.view.MotionEvent
 import android.view.View
-import android.view.animation.OvershootInterpolator
-import kotlin.math.abs
+import android.view.animation.LinearInterpolator
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.random.Random
 
 /**
- * 小豬撲滿：依累計熱量餘額在「很胖 → 普通 → 很壯」約五階之間變形。
- * balance > 0（熱量進帳）→ 變胖；balance < 0（缺口／存款）→ 變壯。
+ * 電子雞式小豬：貼圖立繪 + 部位變壯疊圖，會在場地內自主遊走／暫停／打滾／坐下睡覺。
  */
 class PigMascotView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    enum class Stage(val score: Float, val caption: String) {
-        VERY_FAT(2f, "小豬吃太飽了…"),
-        CHUBBY(1f, "小豬圓圓的"),
-        NORMAL(0f, "小豬狀態剛好"),
-        FIT(-1f, "小豬開始練了"),
-        BUFF(-2f, "小豬超壯！"),
+    enum class Stage(val caption: String) {
+        VERY_FAT("小豬吃太飽了…"),
+        CHUBBY("小豬圓圓的"),
+        NORMAL("小豬狀態剛好"),
+        FIT("小豬開始練了"),
+        BUFF("小豬超壯！"),
     }
 
-    private val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private enum class Behavior { WALK, PAUSE, ROLL, SIT, SLEEP }
+
+    private val bitmaps = HashMap<Int, Bitmap>()
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 5f
+        strokeWidth = 4f
         strokeJoin = Paint.Join.ROUND
-        strokeCap = Paint.Cap.ROUND
+        color = 0xFFE07A95.toInt()
     }
-    private val blushPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val eyePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val snoutPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val sweatPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val sweatPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF7EC8E3.toInt() }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         color = 0xFF9A6B7A.toInt()
+        textSize = 36f
     }
-    private val slotPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33000000 }
 
-    /** Continuous morph in [-2, 2]; negative = buff, positive = fat. */
-    private var morph = 0f
-    private var targetMorph = 0f
-    private var bounce = 1f
-    private var anim: ValueAnimator? = null
-    private var pulse = 0f
-    private val pulseAnim = ValueAnimator.ofFloat(0f, (Math.PI * 2).toFloat()).apply {
-        duration = 2400
+    private var balance = 0.0
+    private var moodOverride: PigMood? = null
+    private var partLevels: Map<String, Int> = emptyMap()
+    private var vitals = PigVitals(70, 70, 70)
+    var stageCaption: String = Stage.NORMAL.caption
+        private set
+
+    // wander state (normalized 0..1 inside usable area)
+    private var pigX = 0.5f
+    private var pigY = 0.55f
+    private var facingRight = true
+    private var behavior = Behavior.PAUSE
+    private var behaviorUntil = 0L
+    private var walkTargetX = 0.5f
+    private var walkSpeed = 0.00018f
+    private var rollAngle = 0f
+    private var rollProgress = 0f
+    private var waddle = 0f
+    private var bounce = 0f
+    private var blink = 0f
+    private var celebrateUntil = 0L
+    private var tapPulse = 0f
+
+    private val tick = ValueAnimator.ofFloat(0f, 1f).apply {
+        duration = 1000
         repeatCount = ValueAnimator.INFINITE
+        interpolator = LinearInterpolator()
         addUpdateListener {
-            pulse = it.animatedValue as Float
+            stepAi(16)
+            bounce = (bounce + 0.09f) % (Math.PI * 2).toFloat()
+            blink = (blink + 0.04f) % 40f
+            if (tapPulse > 0f) tapPulse = (tapPulse - 0.06f).coerceAtLeast(0f)
             invalidate()
         }
     }
 
-    var stageCaption: String = Stage.NORMAL.caption
-        private set
-
     init {
-        // Pastel pink pig palette
-        bodyPaint.color = 0xFFFFB6C8.toInt()
-        strokePaint.color = 0xFFE07A95.toInt()
-        blushPaint.color = 0xFFFF8FAB.toInt()
-        blushPaint.alpha = 110
-        eyePaint.color = 0xFF3A2A32.toInt()
-        snoutPaint.color = 0xFFFF9EB5.toInt()
-        accentPaint.color = 0xFF7EC8A3.toInt()
-        sweatPaint.color = 0xFF7EC8E3.toInt()
-        slotPaint.color = 0xFF6B4A55.toInt()
-        if (isInEditMode.not()) pulseAnim.start()
+        isClickable = true
+        if (!isInEditMode) tick.start()
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        pulseAnim.cancel()
-        anim?.cancel()
+        tick.cancel()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (!tick.isStarted) tick.start()
+        pickBehavior(force = true)
     }
 
     fun setBalance(balanceKcal: Double, animate: Boolean = true) {
-        val t = scoreFor(balanceKcal)
-        targetMorph = t
-        stageCaption = stageFor(t).caption
-        if (!animate) {
-            morph = t
-            bounce = 1f
-            invalidate()
-            return
+        balance = balanceKcal
+        stageCaption = stageFor(scoreFor(balanceKcal)).caption
+        invalidate()
+    }
+
+    fun setPartLevels(levels: Map<String, Int>) {
+        partLevels = levels
+        invalidate()
+    }
+
+    fun setVitals(v: PigVitals) {
+        vitals = v
+        invalidate()
+    }
+
+    fun setMoodOverride(mood: PigMood?, ms: Long = 0L) {
+        moodOverride = mood
+        if (mood == PigMood.CELEBRATE || mood == PigMood.WORKOUT || mood == PigMood.EAT) {
+            celebrateUntil = System.currentTimeMillis() + if (ms > 0) ms else 2800L
+            behavior = Behavior.PAUSE
+            behaviorUntil = celebrateUntil
         }
-        anim?.cancel()
-        val start = morph
-        anim = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 700
-            interpolator = OvershootInterpolator(1.4f)
-            addUpdateListener {
-                val f = it.animatedFraction
-                morph = start + (t - start) * f
-                bounce = 1f + 0.08f * sin(f * Math.PI).toFloat()
-                invalidate()
-            }
-            start()
+        invalidate()
+    }
+
+    fun currentStage(): Stage = stageFor(scoreFor(balance))
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_DOWN) {
+            tapPulse = 1f
+            // react: hop + maybe flip
+            if (Random.nextBoolean()) facingRight = !facingRight
+            behavior = Behavior.PAUSE
+            behaviorUntil = System.currentTimeMillis() + 900
+            moodOverride = PigMood.NORMAL
+            celebrateUntil = System.currentTimeMillis() + 900
+            performClick()
+            return true
+        }
+        return super.onTouchEvent(event)
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
+    }
+
+    private fun bmp(res: Int): Bitmap {
+        bitmaps[res]?.let { return it }
+        val b = BitmapFactory.decodeResource(resources, res)
+        bitmaps[res] = b
+        return b
+    }
+
+    private fun resolveMood(): PigMood {
+        val now = System.currentTimeMillis()
+        if (now < celebrateUntil && moodOverride != null) return moodOverride!!
+        moodOverride?.let { if (it == PigMood.HUNGRY || it == PigMood.SLEEP) return it }
+        if (behavior == Behavior.SLEEP) return PigMood.SLEEP
+        if (behavior == Behavior.SIT && vitals.satiety < 35) return PigMood.HUNGRY
+        // night
+        val hour = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Taipei"))
+            .get(java.util.Calendar.HOUR_OF_DAY)
+        if (hour >= 22 || hour < 6) {
+            if (behavior == Behavior.PAUSE || behavior == Behavior.SIT) return PigMood.SLEEP
+        }
+        if (vitals.satiety < 28) return PigMood.HUNGRY
+        val score = scoreFor(balance)
+        return when {
+            score >= 1.5f -> PigMood.VERY_FAT
+            score >= 0.5f -> PigMood.CHUBBY
+            score <= -1.5f -> PigMood.BUFF
+            score <= -0.5f -> PigMood.BUFF
+            else -> PigMood.NORMAL
         }
     }
 
-    fun currentStage(): Stage = stageFor(morph)
+    private fun spriteRes(mood: PigMood): Int = when (mood) {
+        PigMood.EAT -> R.drawable.pig_eat
+        PigMood.HUNGRY -> R.drawable.pig_hungry
+        PigMood.SLEEP -> R.drawable.pig_sleep
+        PigMood.WORKOUT, PigMood.CELEBRATE -> R.drawable.pig_workout
+        PigMood.BUFF -> R.drawable.pig_buff
+        PigMood.CHUBBY -> R.drawable.pig_chubby
+        PigMood.VERY_FAT -> R.drawable.pig_very_fat
+        PigMood.NORMAL -> R.drawable.pig_normal
+    }
+
+    private fun stepAi(dtMs: Int) {
+        val now = System.currentTimeMillis()
+        if (now < celebrateUntil) return
+        if (now >= behaviorUntil) pickBehavior()
+        when (behavior) {
+            Behavior.WALK -> {
+                val dir = if (walkTargetX >= pigX) 1f else -1f
+                facingRight = dir > 0
+                pigX += dir * walkSpeed * dtMs
+                // slight vertical bob path
+                pigY += sin(bounce.toDouble()).toFloat() * 0.0004f * dtMs
+                pigY = pigY.coerceIn(0.28f, 0.78f)
+                waddle = sin(bounce * 2.2f) * 8f
+                if ((dir > 0 && pigX >= walkTargetX) || (dir < 0 && pigX <= walkTargetX)) {
+                    pigX = walkTargetX.coerceIn(0.12f, 0.88f)
+                    pickBehavior()
+                }
+                pigX = pigX.coerceIn(0.12f, 0.88f)
+            }
+            Behavior.ROLL -> {
+                rollProgress += dtMs / 900f
+                rollAngle = rollProgress * 360f * (if (facingRight) 1f else -1f)
+                pigX += (if (facingRight) 1f else -1f) * 0.00055f * dtMs
+                pigX = pigX.coerceIn(0.14f, 0.86f)
+                if (rollProgress >= 1f) {
+                    rollAngle = 0f
+                    rollProgress = 0f
+                    pickBehavior()
+                }
+            }
+            Behavior.PAUSE, Behavior.SIT, Behavior.SLEEP -> {
+                waddle *= 0.9f
+                rollAngle *= 0.8f
+            }
+        }
+    }
+
+    private fun pickBehavior(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        val hour = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Taipei"))
+            .get(java.util.Calendar.HOUR_OF_DAY)
+        val night = hour >= 22 || hour < 6
+        val r = Random.nextFloat()
+        behavior = when {
+            night && r < 0.55f -> Behavior.SLEEP
+            vitals.satiety < 30 && r < 0.4f -> Behavior.SIT
+            r < 0.42f -> Behavior.WALK
+            r < 0.62f -> Behavior.PAUSE
+            r < 0.78f -> Behavior.SIT
+            r < 0.90f -> Behavior.ROLL
+            else -> Behavior.SLEEP
+        }
+        if (force && !night) behavior = Behavior.WALK
+        behaviorUntil = now + when (behavior) {
+            Behavior.WALK -> (1800..4200).random().toLong()
+            Behavior.PAUSE -> (900..2600).random().toLong()
+            Behavior.SIT -> (1600..4000).random().toLong()
+            Behavior.SLEEP -> (2500..6000).random().toLong()
+            Behavior.ROLL -> 950L
+        }
+        if (behavior == Behavior.WALK) {
+            walkTargetX = (0.14f + Random.nextFloat() * 0.72f)
+            walkSpeed = 0.00012f + Random.nextFloat() * 0.00018f
+            facingRight = walkTargetX >= pigX
+        }
+        if (behavior == Behavior.ROLL) {
+            rollProgress = 0f
+            if (pigX > 0.7f) facingRight = false
+            if (pigX < 0.3f) facingRight = true
+        }
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val w = MeasureSpec.getSize(widthMeasureSpec)
+        val h = resolveSize((w * 1.05f).toInt(), heightMeasureSpec)
+        setMeasuredDimension(w, max(h, (w * 0.85f).toInt()))
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val w = width.toFloat()
+        val h = height.toFloat()
+        if (w <= 0 || h <= 0) return
+
+        val mood = resolveMood()
+        val src = spriteRes(mood)
+        val bm = try { bmp(src) } catch (_: Exception) { return }
+
+        val cx = w * pigX
+        val cy = h * pigY
+        val baseSize = min(w, h) * 0.42f * (1f + tapPulse * 0.08f)
+        val aspect = bm.width.toFloat() / bm.height.toFloat()
+        var dw = baseSize
+        var dh = baseSize / aspect
+        if (dh > h * 0.62f) {
+            dh = h * 0.62f
+            dw = dh * aspect
+        }
+        // squash during roll
+        if (behavior == Behavior.ROLL) {
+            val squash = 1f + 0.18f * sin(rollProgress * Math.PI).toFloat()
+            dw *= squash
+            dh /= squash
+        }
+        // sit: lower a bit
+        val sitDrop = if (behavior == Behavior.SIT || behavior == Behavior.SLEEP || mood == PigMood.SLEEP || mood == PigMood.HUNGRY) dh * 0.06f else 0f
+        val idleBob = if (behavior == Behavior.WALK) sin(bounce.toDouble()).toFloat() * 6f else sin(bounce.toDouble()).toFloat() * 3f
+
+        // shadow
+        canvas.drawOval(
+            RectF(cx - dw * 0.38f, cy + dh * 0.42f - sitDrop, cx + dw * 0.38f, cy + dh * 0.52f - sitDrop),
+            shadowPaint
+        )
+
+        canvas.save()
+        canvas.translate(cx, cy + idleBob - sitDrop)
+        canvas.rotate(rollAngle + waddle * 0.35f)
+        if (!facingRight) canvas.scale(-1f, 1f)
+
+        val dst = RectF(-dw / 2f, -dh / 2f, dw / 2f, dh / 2f)
+        canvas.drawBitmap(bm, null, dst, paint)
+
+        // muscle overlays (attached, flip with pig)
+        drawMuscleOverlays(canvas, dw, dh, mood)
+
+        // sweat for chubby/very fat
+        if (mood == PigMood.CHUBBY || mood == PigMood.VERY_FAT) {
+            drawSweat(canvas, dw * 0.35f, -dh * 0.15f)
+            if (mood == PigMood.VERY_FAT) drawSweat(canvas, -dw * 0.32f, -dh * 0.05f)
+        }
+
+        // blink veil occasionally on normal
+        if (mood == PigMood.NORMAL && blink < 1.2f) {
+            val lid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33FFB6C8 }
+            canvas.drawOval(RectF(-dw * 0.18f, -dh * 0.18f, dw * 0.18f, -dh * 0.02f), lid)
+        }
+
+        canvas.restore()
+
+        // caption
+        textPaint.textSize = 13f * resources.displayMetrics.scaledDensity
+        val cap = when (behavior) {
+            Behavior.ROLL -> "小豬打滾中～"
+            Behavior.SLEEP, Behavior.SIT -> if (mood == PigMood.HUNGRY) "肚子餓了…" else if (mood == PigMood.SLEEP) "Zzz…" else stageCaption
+            else -> stageCaption
+        }
+        canvas.drawText(cap, w / 2f, h * 0.96f, textPaint)
+    }
+
+    private fun drawMuscleOverlays(canvas: Canvas, dw: Float, dh: Float, mood: PigMood) {
+        // Skip heavy overlays when using full buff sprite already
+        val arms = partLevels["手臂"] ?: 0
+        val chest = partLevels["胸"] ?: 0
+        val abs = partLevels["腹"] ?: 0
+        val legs = partLevels["腿"] ?: 0
+        val shoulders = partLevels["肩"] ?: 0
+        val back = partLevels["背"] ?: 0
+        val glutes = partLevels["臀"] ?: 0
+        if (arms + chest + abs + legs + shoulders + back + glutes <= 0) return
+        if (mood == PigMood.BUFF && arms >= 2 && chest >= 2) {
+            // buff sprite already shows muscles; still add headband hint via abs/legs only
+        }
+
+        fun muscleColor(level: Int): Int = when (level) {
+            1 -> 0xFFFFC1D4.toInt()
+            2 -> 0xFFFFA8BE.toInt()
+            else -> 0xFFFF8FAB.toInt()
+        }
+
+        // arms (left/right of torso)
+        if (arms > 0 && mood != PigMood.BUFF) {
+            val r = dw * (0.10f + arms * 0.025f)
+            overlayPaint.color = muscleColor(arms)
+            // right arm (visual right = +x when facing)
+            canvas.drawCircle(dw * 0.42f, dh * 0.05f, r, overlayPaint)
+            canvas.drawCircle(dw * 0.42f, dh * 0.05f, r, strokePaint)
+            canvas.drawCircle(-dw * 0.42f, dh * 0.05f, r, overlayPaint)
+            canvas.drawCircle(-dw * 0.42f, dh * 0.05f, r, strokePaint)
+            if (arms >= 2) {
+                canvas.drawCircle(dw * 0.40f, -dh * 0.08f, r * 0.7f, overlayPaint)
+                canvas.drawCircle(-dw * 0.40f, -dh * 0.08f, r * 0.7f, overlayPaint)
+            }
+        }
+
+        // shoulders pads
+        if (shoulders > 0) {
+            overlayPaint.color = muscleColor(shoulders)
+            val r = dw * (0.08f + shoulders * 0.02f)
+            canvas.drawCircle(dw * 0.28f, -dh * 0.12f, r, overlayPaint)
+            canvas.drawCircle(-dw * 0.28f, -dh * 0.12f, r, overlayPaint)
+        }
+
+        // chest
+        if (chest > 0) {
+            overlayPaint.color = muscleColor(chest)
+            val rr = RectF(-dw * (0.16f + chest * 0.02f), -dh * 0.02f, dw * (0.16f + chest * 0.02f), dh * (0.12f + chest * 0.02f))
+            canvas.drawOval(rr, overlayPaint)
+            strokePaint.alpha = 140
+            canvas.drawLine(0f, rr.top + 4f, 0f, rr.bottom - 4f, strokePaint)
+            strokePaint.alpha = 255
+        }
+
+        // abs
+        if (abs > 0) {
+            overlayPaint.color = muscleColor(abs)
+            val cols = abs.coerceAtMost(3)
+            val cellW = dw * 0.07f
+            val cellH = dh * 0.05f
+            val startY = dh * 0.12f
+            for (row in 0 until cols) {
+                for (col in 0 until 2) {
+                    val x = (col * 2 - 1) * cellW * 1.1f
+                    val y = startY + row * cellH * 1.3f
+                    canvas.drawRoundRect(RectF(x - cellW, y, x + cellW, y + cellH), 6f, 6f, overlayPaint)
+                }
+            }
+        }
+
+        // legs
+        if (legs > 0 || glutes > 0) {
+            val lv = max(legs, glutes)
+            overlayPaint.color = muscleColor(lv)
+            val r = dw * (0.09f + lv * 0.02f)
+            canvas.drawOval(RectF(-dw * 0.28f - r, dh * 0.28f, -dw * 0.08f + r * 0.2f, dh * 0.48f), overlayPaint)
+            canvas.drawOval(RectF(dw * 0.08f - r * 0.2f, dh * 0.28f, dw * 0.28f + r, dh * 0.48f), overlayPaint)
+        }
+
+        // headband if any strength high
+        val maxL = listOf(arms, chest, abs, legs, shoulders, back, glutes).maxOrNull() ?: 0
+        if (maxL >= 2 && mood != PigMood.BUFF && mood != PigMood.SLEEP) {
+            val band = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFF6B8A.toInt() }
+            val by = -dh * 0.28f
+            canvas.drawRoundRect(RectF(-dw * 0.28f, by - dh * 0.03f, dw * 0.28f, by + dh * 0.03f), 8f, 8f, band)
+            canvas.drawCircle(dw * 0.30f, by, dh * 0.035f, band)
+        }
+    }
+
+    private fun drawSweat(canvas: Canvas, x: Float, y: Float) {
+        val drop = Path().apply {
+            moveTo(x, y)
+            quadTo(x + 10f, y + 14f, x, y + 26f)
+            quadTo(x - 10f, y + 14f, x, y)
+            close()
+        }
+        canvas.drawPath(drop, sweatPaint)
+        canvas.drawPath(drop, strokePaint)
+    }
 
     companion object {
         fun scoreFor(balance: Double): Float {
-            val a = abs(balance)
+            val a = kotlin.math.abs(balance)
             val mag = when {
                 a >= 4000 -> 2f
                 a >= 2200 -> 1.5f
@@ -141,228 +468,5 @@ class PigMascotView @JvmOverloads constructor(
             score <= -0.5f -> Stage.FIT
             else -> Stage.NORMAL
         }
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val w = MeasureSpec.getSize(widthMeasureSpec)
-        val hWant = (w * 0.92f).toInt()
-        val h = resolveSize(hWant, heightMeasureSpec)
-        setMeasuredDimension(w, h)
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        val w = width.toFloat()
-        val h = height.toFloat()
-        if (w <= 0 || h <= 0) return
-
-        val cx = w / 2f
-        val cy = h * 0.48f
-        val fat = max(0f, morph)           // 0..2
-        val buff = max(0f, -morph)         // 0..2
-        val breathe = 1f + 0.015f * sin(pulse.toDouble()).toFloat()
-        val scale = bounce * breathe
-
-        canvas.save()
-        canvas.translate(cx, cy)
-        canvas.scale(scale, scale)
-
-        // Shadow
-        val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0x33000000; style = Paint.Style.FILL
-        }
-        canvas.drawOval(RectF(-90f - fat * 18f, 95f, 90f + fat * 18f, 118f + fat * 6f), shadow)
-
-        // Body size morph
-        val bodyW = 100f + fat * 38f - buff * 8f
-        val bodyH = 88f + fat * 28f - buff * 4f
-        // Buff: taller chest
-        val chestBoost = buff * 10f
-
-        // Ears (behind)
-        drawEar(canvas, -bodyW * 0.55f, -bodyH * 0.75f, -1)
-        drawEar(canvas, bodyW * 0.55f, -bodyH * 0.75f, 1)
-
-        // Arms / muscles when buff
-        if (buff > 0.2f) {
-            drawArm(canvas, -bodyW * 0.85f, 10f, -1, buff)
-            drawArm(canvas, bodyW * 0.85f, 10f, 1, buff)
-        }
-
-        // Body
-        bodyPaint.color = lerpColor(0xFFFFB6C8.toInt(), 0xFFFF9EB5.toInt(), min(1f, fat / 2f))
-        if (buff > 0.5f) {
-            // slightly rosier athletic tone
-            bodyPaint.color = lerpColor(bodyPaint.color, 0xFFFFA8BE.toInt(), min(1f, (buff - 0.5f) / 1.5f))
-        }
-        val body = RectF(-bodyW, -bodyH + chestBoost * 0.2f, bodyW, bodyH)
-        canvas.drawOval(body, bodyPaint)
-        canvas.drawOval(body, strokePaint)
-
-        // Soft belly highlight
-        val hi = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0x55FFFFFF
-        }
-        canvas.drawOval(RectF(-bodyW * 0.45f, bodyH * 0.05f, bodyW * 0.45f, bodyH * 0.75f), hi)
-
-        // Mint spot (brand mark)
-        accentPaint.color = 0xFF9ED9C0.toInt()
-        canvas.drawOval(RectF(bodyW * 0.25f, bodyH * 0.05f, bodyW * 0.55f, bodyH * 0.38f), accentPaint)
-
-        // Coin slot on head
-        val slotY = -bodyH * 0.82f
-        canvas.drawRoundRect(RectF(-22f, slotY - 4f, 22f, slotY + 4f), 4f, 4f, slotPaint)
-
-        // Headband when buff
-        if (buff > 0.6f) {
-            val band = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFF6B8A.toInt() }
-            val by = -bodyH * 0.55f
-            canvas.drawRoundRect(RectF(-bodyW * 0.55f, by - 10f, bodyW * 0.55f, by + 10f), 8f, 8f, band)
-            // knot
-            canvas.drawCircle(bodyW * 0.55f + 8f, by, 10f, band)
-            canvas.drawCircle(bodyW * 0.55f + 18f, by + 8f, 8f, band)
-        }
-
-        // Eyes
-        val eyeY = -bodyH * 0.22f
-        val eyeSpread = bodyW * 0.32f
-        val eyeR = 9f + fat * 1.5f
-        // Squint when very fat
-        val eyeScaleY = if (fat > 1.2f) 0.65f else 1f
-        canvas.save()
-        canvas.scale(1f, eyeScaleY, -eyeSpread, eyeY)
-        canvas.drawCircle(-eyeSpread, eyeY, eyeR, eyePaint)
-        canvas.drawCircle(-eyeSpread - 2.5f, eyeY - 2.5f, 3.2f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
-        canvas.restore()
-        canvas.save()
-        canvas.scale(1f, eyeScaleY, eyeSpread, eyeY)
-        canvas.drawCircle(eyeSpread, eyeY, eyeR, eyePaint)
-        canvas.drawCircle(eyeSpread - 2.5f, eyeY - 2.5f, 3.2f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
-        canvas.restore()
-
-        // Determined brows when buff
-        if (buff > 0.4f) {
-            val brow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0xFF3A2A32.toInt(); strokeWidth = 5f; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
-            }
-            canvas.drawLine(-eyeSpread - 12f, eyeY - 18f, -eyeSpread + 10f, eyeY - 14f, brow)
-            canvas.drawLine(eyeSpread + 12f, eyeY - 18f, eyeSpread - 10f, eyeY - 14f, brow)
-        }
-
-        // Blush
-        blushPaint.alpha = (90 + fat * 40).toInt().coerceIn(60, 160)
-        canvas.drawOval(RectF(-eyeSpread - 28f, eyeY + 8f, -eyeSpread - 4f, eyeY + 26f), blushPaint)
-        canvas.drawOval(RectF(eyeSpread + 4f, eyeY + 8f, eyeSpread + 28f, eyeY + 26f), blushPaint)
-
-        // Snout
-        val snout = RectF(-28f - fat * 4f, 2f + fat * 4f, 28f + fat * 4f, 42f + fat * 8f)
-        snoutPaint.color = 0xFFFF9EB5.toInt()
-        canvas.drawOval(snout, snoutPaint)
-        canvas.drawOval(snout, strokePaint)
-        eyePaint.alpha = 200
-        canvas.drawCircle(-10f, 24f + fat * 4f, 4.5f, eyePaint)
-        canvas.drawCircle(10f, 24f + fat * 4f, 4.5f, eyePaint)
-        eyePaint.alpha = 255
-
-        // Feet
-        val footY = bodyH * 0.85f
-        bodyPaint.color = 0xFFFFB6C8.toInt()
-        canvas.drawOval(RectF(-bodyW * 0.55f, footY, -bodyW * 0.15f, footY + 28f), bodyPaint)
-        canvas.drawOval(RectF(bodyW * 0.15f, footY, bodyW * 0.55f, footY + 28f), bodyPaint)
-        canvas.drawOval(RectF(-bodyW * 0.55f, footY, -bodyW * 0.15f, footY + 28f), strokePaint)
-        canvas.drawOval(RectF(bodyW * 0.15f, footY, bodyW * 0.55f, footY + 28f), strokePaint)
-
-        // Sweat drop when very fat
-        if (fat > 1.2f) {
-            val sx = bodyW * 0.7f
-            val sy = -bodyH * 0.35f
-            val drop = Path().apply {
-                moveTo(sx, sy)
-                quadTo(sx + 14f, sy + 18f, sx, sy + 32f)
-                quadTo(sx - 14f, sy + 18f, sx, sy)
-                close()
-            }
-            canvas.drawPath(drop, sweatPaint)
-            canvas.drawPath(drop, strokePaint)
-        }
-
-        // Flex sparkles when buff
-        if (buff > 1.2f) {
-            val sp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFD36B.toInt() }
-            drawStar(canvas, -bodyW * 1.15f, -20f, 10f, sp)
-            drawStar(canvas, bodyW * 1.15f, -30f, 8f, sp)
-        }
-
-        canvas.restore()
-
-        // Caption under pig
-        textPaint.textSize = 34f * resources.displayMetrics.scaledDensity / 3f
-        canvas.drawText(stageCaption, w / 2f, h * 0.92f, textPaint)
-    }
-
-    private fun drawEar(canvas: Canvas, x: Float, y: Float, dir: Int) {
-        val ear = Path().apply {
-            moveTo(x, y + 18f)
-            quadTo(x + dir * 28f, y - 28f, x + dir * 8f, y + 30f)
-            close()
-        }
-        canvas.drawPath(ear, bodyPaint)
-        canvas.drawPath(ear, strokePaint)
-        // inner
-        val inner = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFF9EB5.toInt() }
-        val ie = Path().apply {
-            moveTo(x + dir * 2f, y + 16f)
-            quadTo(x + dir * 16f, y - 8f, x + dir * 6f, y + 24f)
-            close()
-        }
-        canvas.drawPath(ie, inner)
-    }
-
-    private fun drawArm(canvas: Canvas, x: Float, y: Float, dir: Int, buff: Float) {
-        val muscle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFB6C8.toInt() }
-        val r = 22f + buff * 10f
-        // upper arm / bicep
-        canvas.drawCircle(x, y, r, muscle)
-        canvas.drawCircle(x, y, r, strokePaint)
-        // forearm flexed up
-        val fx = x + dir * (r * 0.2f)
-        val fy = y - r * 1.3f
-        canvas.drawCircle(fx, fy, r * 0.75f, muscle)
-        canvas.drawCircle(fx, fy, r * 0.75f, strokePaint)
-        // fist
-        canvas.drawCircle(fx, fy - r * 0.9f, r * 0.45f, muscle)
-        canvas.drawCircle(fx, fy - r * 0.9f, r * 0.45f, strokePaint)
-        // bicep highlight line
-        if (buff > 1f) {
-            val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0x55E07A95; strokeWidth = 3f; style = Paint.Style.STROKE
-            }
-            canvas.drawArc(RectF(x - r * 0.6f, y - r * 0.3f, x + r * 0.6f, y + r * 0.7f), 200f, 100f, false, line)
-        }
-    }
-
-    private fun drawStar(canvas: Canvas, cx: Float, cy: Float, r: Float, p: Paint) {
-        val path = Path()
-        for (i in 0 until 8) {
-            val a = i * Math.PI / 4.0 - Math.PI / 2
-            val rr = if (i % 2 == 0) r else r * 0.4f
-            val x = (cx + cos(a) * rr).toFloat()
-            val y = (cy + sin(a) * rr).toFloat()
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-        path.close()
-        canvas.drawPath(path, p)
-    }
-
-    private fun lerpColor(a: Int, b: Int, t: Float): Int {
-        val tt = t.coerceIn(0f, 1f)
-        val ar = Color.red(a); val ag = Color.green(a); val ab = Color.blue(a); val aa = Color.alpha(a)
-        val br = Color.red(b); val bg = Color.green(b); val bb = Color.blue(b); val ba = Color.alpha(b)
-        return Color.argb(
-            (aa + (ba - aa) * tt).toInt(),
-            (ar + (br - ar) * tt).toInt(),
-            (ag + (bg - ag) * tt).toInt(),
-            (ab + (bb - ab) * tt).toInt(),
-        )
     }
 }
