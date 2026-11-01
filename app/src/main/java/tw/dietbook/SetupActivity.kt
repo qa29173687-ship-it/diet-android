@@ -74,9 +74,9 @@ class SetupActivity : AppCompatActivity() {
         calcBox.addView(label(this, "體重 (kg)")); calcBox.addView(weight)
         calcBox.addView(secondaryBtn(this, "填入估算 BMR") {
             val sex = if (sexGroup.checkedRadioButtonId == 2) "female" else "male"
-            val a = age.text.toString().toIntOrNull() ?: 30
-            val h = height.text.toString().toDoubleOrNull() ?: 170.0
-            val w = weight.text.toString().toDoubleOrNull() ?: 70.0
+            val a = Numbers.intOrNull(age.text.toString()) ?: 30
+            val h = Numbers.doubleOrNull(height.text.toString()) ?: 170.0
+            val w = Numbers.doubleOrNull(weight.text.toString()) ?: 70.0
             val est = Calc.mifflin(sex, w, h, a)
             bmrField.setText(Calc.r0(est))
             Toast.makeText(this, "已填入估算 ${Calc.r0(est)} kcal（可再手動微調）", Toast.LENGTH_SHORT).show()
@@ -87,7 +87,7 @@ class SetupActivity : AppCompatActivity() {
         body.addView(calcBox)
 
         body.addView(primaryBtn(this, "開啟存錢筒 🐷") {
-            val manual = bmrField.text.toString().toDoubleOrNull()
+            val manual = Numbers.doubleOrNull(bmrField.text.toString())
             if (manual == null) {
                 Toast.makeText(this, "請先輸入你的 BMR 喔", Toast.LENGTH_SHORT).show()
                 return@primaryBtn
@@ -103,8 +103,8 @@ class SetupActivity : AppCompatActivity() {
             val h = (meta?.get("h") as? Double) ?: 170.0
             val w = (meta?.get("w") as? Double) ?: 70.0
             val act = levels[spin.selectedItemPosition]
-            val gk = goalK.text.toString().toDoubleOrNull() ?: Calc.tdee(manual, act)
-            val gp = goalP.text.toString().toDoubleOrNull() ?: 80.0
+            val gk = Numbers.doubleOrNull(goalK.text.toString()) ?: Calc.tdee(manual, act)
+            val gp = Numbers.doubleOrNull(goalP.text.toString()) ?: 80.0
             Store.saveProfile(
                 this,
                 UserProfile(

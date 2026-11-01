@@ -90,14 +90,14 @@ class StrengthActivity : AppCompatActivity() {
         body.addView(label(this, "預估消耗（MET $met）", 12f))
         body.addView(kcalF)
         minF.setOnFocusChangeListener { _, _ ->
-            val m = minF.text.toString().toIntOrNull() ?: return@setOnFocusChangeListener
+            val m = Numbers.intOrNull(minF.text.toString()) ?: return@setOnFocusChangeListener
             kcalF.setText(Calc.r0(Calc.metKcal(met, u.weightKg, m)).toString())
         }
 
         body.addView(primaryBtn(this, "完成鍛鍊！") {
-            val sets = setsF.text.toString().toIntOrNull() ?: 0
-            val minutes = minF.text.toString().toIntOrNull() ?: 0
-            val kcal = kcalF.text.toString().toDoubleOrNull() ?: 0.0
+            val sets = Numbers.intOrNull(setsF.text.toString()) ?: 0
+            val minutes = Numbers.intOrNull(minF.text.toString()) ?: 0
+            val kcal = Numbers.doubleOrNull(kcalF.text.toString()) ?: 0.0
             val name = nameF.text.toString().ifBlank { "${selectedPart}訓練" }
             if (minutes <= 0) {
                 Toast.makeText(this, "請填分鐘", Toast.LENGTH_SHORT).show()

@@ -8,8 +8,8 @@ android {
         applicationId = "tw.dietbook"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "2.2.1"
+        versionCode = 7
+        versionName = "2.2.2"
     }
     signingConfigs {
         if (ksProps.isNotEmpty()) create("release") {
@@ -32,7 +32,12 @@ android {
         checkReleaseBuilds = false
         disable += setOf("GradleDependency", "OldTargetApi", "SetTextI18n", "HardcodedText", "ViewConstructor", "ClickableViewAccessibility", "ObsoleteSdkInt", "AndroidGradlePluginVersion", "NewerVersionAvailable", "UnusedAttribute", "IconMissingDensityFolder")
     }
-    testOptions { unitTests.isIncludeAndroidResources = true; unitTests.all { it.systemProperty("previewDir", rootProject.file("previews").absolutePath) } }
+    testOptions { unitTests.isIncludeAndroidResources = true; unitTests.all { it.systemProperty("previewDir", rootProject.file("previews").absolutePath)
+            it.systemProperty("demoFramesDir", rootProject.file("demo/frames").absolutePath) } }
+    androidResources {
+        // 保留 .gz 原樣，避免 AGP 解壓後檔名變成 trace-nutrition.jsonl 而程式開 .gz 失敗
+        noCompress += "gz"
+    }
     packaging { resources { excludes += setOf("/META-INF/{AL2.0,LGPL2.1}", "META-INF/DEPENDENCIES") } }
 }
 dependencies {

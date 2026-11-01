@@ -51,9 +51,9 @@ object TraceIndex {
             rows?.let { return }
             val list = ArrayList<Row>(12000)
             val bcMap = HashMap<String, Row>(64)
-            openNutrition(ctx).use { raw ->
-                GZIPInputStream(raw).use { gz ->
-                    BufferedReader(InputStreamReader(gz, Charsets.UTF_8)).useLines { lines ->
+            try {
+                openNutrition(ctx)?.use { raw ->
+                    BufferedReader(InputStreamReader(raw, Charsets.UTF_8)).useLines { lines ->
                         lines.forEach { line ->
                             if (line.isBlank()) return@forEach
                             try {
@@ -77,10 +77,8 @@ object TraceIndex {
                         }
                     }
                 }
-            }
-            openBarcodes(ctx)?.use { raw ->
-                GZIPInputStream(raw).use { gz ->
-                    BufferedReader(InputStreamReader(gz, Charsets.UTF_8)).useLines { lines ->
+                openBarcodes(ctx)?.use { raw ->
+                    BufferedReader(InputStreamReader(raw, Charsets.UTF_8)).useLines { lines ->
                         lines.forEach { line ->
                             val parts = line.split('\t')
                             if (parts.size >= 2) {
@@ -93,6 +91,8 @@ object TraceIndex {
                         }
                     }
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("TraceIndex", "ensureLoaded failed", e)
             }
             rows = list
             byBarcode = bcMap
@@ -100,19 +100,42 @@ object TraceIndex {
         }
     }
 
-    private fun openNutrition(ctx: Context): InputStream {
+    /**
+     * AGP 預設會把 assets 裡的 .gz 解成無副檔名壓縮檔（APK 內變成 trace-nutrition.jsonl）。
+     * 下載到 filesDir 的仍可能是真正的 gzip。兩者都要能開，且絕不可讓未捕捉例外打爆 UI。
+     */
+    private fun maybeGunzip(stream: InputStream): InputStream {
+        val buffered = if (stream.markSupported()) stream else java.io.BufferedInputStream(stream)
+        buffered.mark(4)
+        val b0 = buffered.read()
+        val b1 = buffered.read()
+        buffered.reset()
+        return if (b0 == 0x1f && b1 == 0x8b) GZIPInputStream(buffered) else buffered
+    }
+
+    private fun openAssetPreferGzip(ctx: Context, gzName: String, plainName: String): InputStream? {
+        for (name in listOf(gzName, plainName)) {
+            try {
+                return maybeGunzip(ctx.assets.open(name))
+            } catch (_: Exception) { }
+        }
+        return null
+    }
+
+    private fun openNutrition(ctx: Context): InputStream? {
         val f = nutritionFile(ctx)
-        return if (f.exists() && f.length() > 0) f.inputStream()
-        else ctx.assets.open("trace-nutrition.jsonl.gz")
+        if (f.exists() && f.length() > 0) {
+            return try { maybeGunzip(f.inputStream()) } catch (_: Exception) { null }
+        }
+        return openAssetPreferGzip(ctx, "trace-nutrition.jsonl.gz", "trace-nutrition.jsonl")
     }
 
     private fun openBarcodes(ctx: Context): InputStream? {
         val f = barcodesFile(ctx)
-        if (f.exists() && f.length() > 40) return f.inputStream()
-        return try {
-            // 內建檔若幾乎是空 gzip（無可用條碼）仍開啟；解析時自然為空
-            ctx.assets.open("trace-barcodes.tsv.gz")
-        } catch (_: Exception) { null }
+        if (f.exists() && f.length() > 40) {
+            return try { maybeGunzip(f.inputStream()) } catch (_: Exception) { null }
+        }
+        return openAssetPreferGzip(ctx, "trace-barcodes.tsv.gz", "trace-barcodes.tsv")
     }
 
     fun findByBarcode(ctx: Context, barcode: String): Row? {

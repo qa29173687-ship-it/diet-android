@@ -8,9 +8,14 @@ class LogActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         edge()
-        val id = intent.getStringExtra("foodId") ?: run { finish(); return }
-        val food = Store.findFood(this, id) ?: run {
-            Toast.makeText(this, "找不到食物", Toast.LENGTH_SHORT).show(); finish(); return
+        val id = intent.getStringExtra("foodId")
+        // 優先用搜尋結果直接帶入的 payload，避免再解析資產失敗而 finish 回上一層／主畫面
+        val food = FoodCodec.fromJson(intent.getStringExtra("foodJson"))
+            ?: id?.let { Store.findFood(this, it) }
+        if (food == null) {
+            Toast.makeText(this, "找不到食物", Toast.LENGTH_SHORT).show()
+            finish()
+            return
         }
         val (root, body) = col(this)
         setContentView(root)
@@ -24,7 +29,7 @@ class LogActivity : AppCompatActivity() {
         val preview = label(this, "", 15f, C.text)
         body.addView(preview)
         fun update() {
-            val g = grams.text.toString().toDoubleOrNull() ?: 0.0
+            val g = Numbers.doubleOrNull(grams.text.toString()) ?: 0.0
             val k = Calc.scale(food.kcalPer100, g)
             val p = Calc.scale(food.proteinPer100, g)
             preview.text = "預估：${Calc.r0(k)} kcal　蛋白質 ${Calc.r1(p)} g"
@@ -45,7 +50,7 @@ class LogActivity : AppCompatActivity() {
         }
 
         body.addView(primaryBtn(this, "加入今日") {
-            val g = grams.text.toString().toDoubleOrNull()
+            val g = Numbers.doubleOrNull(grams.text.toString())
             if (g == null || g <= 0) {
                 Toast.makeText(this, "請輸入有效公克數", Toast.LENGTH_SHORT).show(); return@primaryBtn
             }
@@ -68,19 +73,20 @@ class LogActivity : AppCompatActivity() {
             Store.touchFeed(this)
             Store.bumpStreak(this)
             Outfits.maybeUnlockFromStreak(this)
-            // C: food drop → catch/chew；過量 → 好撐；蛋白質達標 → 牛奶火焰
+            // 動畫只在儲存後排程；回主畫面 onResume 再播，不在選食物／輸入公克時播
             CuteFx.queue(this, PendingCute(CuteScene.FOOD_CATCH, kcal = kcal, label = "好好吃～ ${food.name}"))
             val u = Store.profile(this)
             val (_, dayProtein) = Store.dayTotals(this, day)
             if (dayProtein >= u.goalProtein && u.goalProtein > 0) {
                 CuteFx.queue(this, PendingCute(CuteScene.PROTEIN_POWER, protein = dayProtein))
             }
-            // rough surplus: today's intake already high vs goal
             val (dayKcal, _) = Store.dayTotals(this, day)
             if (dayKcal > u.goalKcal * 1.15 && u.goalKcal > 0) {
                 CuteFx.queue(this, PendingCute(CuteScene.SURPLUS_BELLY, kcal = dayKcal))
             }
             Toast.makeText(this, "已加入，回家看小豬吃飯～", Toast.LENGTH_SHORT).show()
+            // 關掉搜尋＋本頁，回主畫面播吃飯動畫
+            setResult(RESULT_OK)
             finish()
         })
     }

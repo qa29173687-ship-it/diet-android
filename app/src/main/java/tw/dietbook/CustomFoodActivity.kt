@@ -98,7 +98,8 @@ class CustomFoodActivity : AppCompatActivity() {
             body.addView(secondaryBtn(this, "直接記錄此份量") {
                 if (!saveInternal(finishAfter = false)) return@secondaryBtn
                 val id = editId ?: return@secondaryBtn
-                startActivity(Intent(this, LogActivity::class.java).putExtra("foodId", id))
+                val food = Store.findFood(this, id)
+                startActivity(Intent(this, LogActivity::class.java).putExtra("foodId", id).putExtra("foodJson", food?.let { FoodCodec.toJson(it) }))
                 setResult(RESULT_OK)
                 finish()
             })
@@ -115,7 +116,7 @@ class CustomFoodActivity : AppCompatActivity() {
                 }
                 row.addView(label(this, subL))
                 row.setOnClickListener {
-                    startActivity(Intent(this, LogActivity::class.java).putExtra("foodId", f.id)); finish()
+                    startActivity(Intent(this, LogActivity::class.java).putExtra("foodId", f.id).putExtra("foodJson", FoodCodec.toJson(f))); finish()
                 }
                 row.setOnLongClickListener {
                     Store.deleteCustom(this, f.id)

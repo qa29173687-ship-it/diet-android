@@ -77,7 +77,7 @@ class CardioActivity : AppCompatActivity() {
         body.addView(kcalF)
 
         minutesF.setOnFocusChangeListener { _, _ ->
-            val m = minutesF.text.toString().toIntOrNull() ?: return@setOnFocusChangeListener
+            val m = Numbers.intOrNull(minutesF.text.toString()) ?: return@setOnFocusChangeListener
             val k = Calc.metKcal(selected.met, u.weightKg, m)
             kcalF.setText(Calc.r0(k).toString())
         }
@@ -85,8 +85,8 @@ class CardioActivity : AppCompatActivity() {
         body.addView(label(this, "規則：有手動運動時，今日活動消耗以手動總和為準，不再加 Health Connect，避免算兩次。", 12f, C.muted))
 
         body.addView(primaryBtn(this, "存下來，讓小豬稱讚我") {
-            val minutes = minutesF.text.toString().toIntOrNull() ?: 0
-            val kcal = kcalF.text.toString().toDoubleOrNull() ?: 0.0
+            val minutes = Numbers.intOrNull(minutesF.text.toString()) ?: 0
+            val kcal = Numbers.doubleOrNull(kcalF.text.toString()) ?: 0.0
             if (minutes <= 0 || kcal <= 0) {
                 Toast.makeText(this, "請填分鐘與熱量", Toast.LENGTH_SHORT).show()
                 return@primaryBtn

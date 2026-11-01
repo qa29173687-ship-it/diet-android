@@ -58,9 +58,9 @@ class SettingsActivity : AppCompatActivity() {
 
         body.addView(secondaryBtn(this, "用小計算機估算 BMR（次要）") {
             val sex = if (sexGroup.checkedRadioButtonId == 2) "female" else "male"
-            val a = age.text.toString().toIntOrNull() ?: return@secondaryBtn
-            val h = height.text.toString().toDoubleOrNull() ?: return@secondaryBtn
-            val w = weight.text.toString().toDoubleOrNull() ?: return@secondaryBtn
+            val a = Numbers.intOrNull(age.text.toString()) ?: return@secondaryBtn
+            val h = Numbers.doubleOrNull(height.text.toString()) ?: return@secondaryBtn
+            val w = Numbers.doubleOrNull(weight.text.toString()) ?: return@secondaryBtn
             bmrField.setText(Calc.r0(Calc.mifflin(sex, w, h, a)).toString())
             Toast.makeText(this, "已帶入估算值，記得按儲存", Toast.LENGTH_SHORT).show()
         })
@@ -160,22 +160,46 @@ class SettingsActivity : AppCompatActivity() {
             }
         })
 
+        // ---- 崩潰紀錄（診斷輸入／導航閃退）----
+        body.addView(label(this, "診斷", 15f, C.text).apply {
+            setPadding(0, dp(16f), 0, dp(6f)); paint.isFakeBoldText = true
+        })
+        val crashPreview = TextView(this).apply {
+            setTextColor(C.muted); textSize = 12f
+            setPadding(0, 0, 0, dp(8f))
+            typeface = android.graphics.Typeface.MONOSPACE
+        }
+        fun refreshCrash() {
+            val raw = CrashLog.read(this@SettingsActivity)
+            crashPreview.text = if (raw.isNullOrBlank()) "尚無崩潰紀錄。" else raw.take(1200) + if (raw.length > 1200) "\n…" else ""
+        }
+        refreshCrash()
+        body.addView(crashPreview)
+        body.addView(secondaryBtn(this, "複製崩潰紀錄") {
+            if (CrashLog.copyToClipboard(this)) Toast.makeText(this, "已複製到剪貼簿", Toast.LENGTH_SHORT).show()
+            else Toast.makeText(this, "尚無崩潰紀錄", Toast.LENGTH_SHORT).show()
+        })
+        body.addView(secondaryBtn(this, "清除崩潰紀錄") {
+            CrashLog.clear(this); refreshCrash()
+            Toast.makeText(this, "已清除", Toast.LENGTH_SHORT).show()
+        })
+
         body.addView(primaryBtn(this, "儲存設定") {
             val sex = if (sexGroup.checkedRadioButtonId == 2) "female" else "male"
-            val a = age.text.toString().toIntOrNull() ?: u0.age
-            val h = height.text.toString().toDoubleOrNull() ?: u0.heightCm
-            val w = weight.text.toString().toDoubleOrNull() ?: u0.weightKg
-            val bmr = bmrField.text.toString().toDoubleOrNull() ?: u0.bmr
+            val a = Numbers.intOrNull(age.text.toString()) ?: u0.age
+            val h = Numbers.doubleOrNull(height.text.toString()) ?: u0.heightCm
+            val w = Numbers.doubleOrNull(weight.text.toString()) ?: u0.weightKg
+            val bmr = Numbers.doubleOrNull(bmrField.text.toString()) ?: u0.bmr
             val act = levels[spin.selectedItemPosition]
             val remind = remindGroup.checkedRadioButtonId == 1
             val next = u0.copy(
                 sex = sex, age = a, heightCm = h, weightKg = w,
                 bmr = bmr, bmrManual = true,
                 activity = act,
-                goalKcal = goalK.text.toString().toDoubleOrNull() ?: u0.goalKcal,
-                goalProtein = goalP.text.toString().toDoubleOrNull() ?: u0.goalProtein,
+                goalKcal = Numbers.doubleOrNull(goalK.text.toString()) ?: u0.goalKcal,
+                goalProtein = Numbers.doubleOrNull(goalP.text.toString()) ?: u0.goalProtein,
                 hcEnabled = hcToggle.checkedRadioButtonId == 1,
-                paybackDays = payDays.text.toString().toIntOrNull()?.coerceAtLeast(1) ?: 7,
+                paybackDays = Numbers.intOrNull(payDays.text.toString())?.coerceAtLeast(1) ?: 7,
                 remindPayback = remind,
             )
             Store.saveProfile(this, next)

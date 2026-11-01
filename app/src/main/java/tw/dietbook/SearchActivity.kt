@@ -6,11 +6,18 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 
 class SearchActivity : AppCompatActivity() {
     private lateinit var results: LinearLayout
     private var lastQuery = ""
+
+    private val logLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        // 成功記一筆後關掉搜尋，讓主畫面 onResume 播吃飯動畫
+        if (result.resultCode == RESULT_OK) finish()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,7 +58,13 @@ class SearchActivity : AppCompatActivity() {
 
     private fun render(query: String) {
         results.removeAllViews()
-        val list = Tfnd.search(this, query, Store.customFoods(this))
+        val list = try {
+            Tfnd.search(this, query, Store.customFoods(this))
+        } catch (e: Exception) {
+            android.util.Log.e("Search", "search failed", e)
+            Toast.makeText(this, "搜尋資料載入失敗，仍可從預設清單選擇", Toast.LENGTH_SHORT).show()
+            try { Tfnd.search(this, "", Store.customFoods(this)) } catch (_: Exception) { emptyList() }
+        }
         if (list.isEmpty()) {
             results.addView(label(this, "找不到。可以掃條碼或新增自訂食物。", 14f))
             return
@@ -79,7 +92,12 @@ class SearchActivity : AppCompatActivity() {
             }
             row.addView(label(this, sub, 12f))
             row.setOnClickListener {
-                startActivity(Intent(this, LogActivity::class.java).putExtra("foodId", f.id))
+                // 帶上完整食物 JSON，Log 不必再依賴 TraceIndex／資產再開一次
+                logLauncher.launch(
+                    Intent(this, LogActivity::class.java)
+                        .putExtra("foodId", f.id)
+                        .putExtra("foodJson", FoodCodec.toJson(f))
+                )
             }
             results.addView(row)
         }

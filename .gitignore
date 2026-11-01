@@ -11,3 +11,7 @@ DietBook-*.apk
 *.iml
 .DS_Store
 CalorieBank-*.apk
+
+demo/frames/
+demo/peek_*.jpg
+*.apk.idsig
