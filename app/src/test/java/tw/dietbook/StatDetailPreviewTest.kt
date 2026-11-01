@@ -39,15 +39,18 @@ class StatDetailPreviewTest {
         val outDir = File(System.getProperty("demoDir") ?: "/workspace/diet-android/demo").apply { mkdirs() }
         shotKind("intake", File(outDir, "detail-intake.png"))
         shotKind("protein", File(outDir, "detail-protein.png"))
+        shotKind("intake", File(outDir, "delete-entry.png"), showDelete = true)
         require(File(outDir, "detail-intake.png").length() > 8_000)
         require(File(outDir, "detail-protein.png").length() > 8_000)
+        require(File(outDir, "delete-entry.png").length() > 8_000)
     }
 
-    private fun shotKind(kind: String, file: File) {
+    private fun shotKind(kind: String, file: File, showDelete: Boolean = true) {
         val c = RuntimeEnvironment.getApplication()
         val intent = Intent(c, StatDetailDemoActivity::class.java)
             .putExtra(StatDetailDemoActivity.EXTRA_KIND, kind)
             .putExtra(StatDetailDemoActivity.EXTRA_SAMPLE, true)
+            .putExtra(StatDetailDemoActivity.EXTRA_SHOW_DELETE, showDelete)
         val activity = Robolectric.buildActivity(StatDetailDemoActivity::class.java, intent)
             .setup()
             .get()

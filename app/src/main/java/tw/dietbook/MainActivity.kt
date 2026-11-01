@@ -88,6 +88,7 @@ class MainActivity : AppCompatActivity() {
                     applyOutfit()
                 },
                 onBubble = { msg -> bubbleMsg = msg },
+                onStatsChanged = { refresh() },
             )
         }
 

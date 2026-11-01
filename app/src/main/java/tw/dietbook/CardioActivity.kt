@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.google.android.material.snackbar.Snackbar
 import androidx.appcompat.app.AppCompatActivity
 
 class CardioActivity : AppCompatActivity() {
@@ -117,6 +118,16 @@ class CardioActivity : AppCompatActivity() {
             }
         })
 
+        val day = Days.today()
+        val ignoreHc = Store.hcIgnored(this, day)
+        body.addView(secondaryBtn(this, if (ignoreHc) "↩ 恢復今日 Health Connect" else "🙈 忽略今日 Health Connect") {
+            val prev = LogActions.setHcIgnored(this, day, !Store.hcIgnored(this, day))
+            val payload = DeletedPayload.HcIgnore(day, prev)
+            Snackbar.make(body, LogActions.label(payload), Snackbar.LENGTH_LONG)
+                .setAction("復原") { LogActions.restore(this, payload); render() }
+                .show()
+            render()
+        })
         body.addView(label(this, "今日運動", 15f, C.text).apply {
             setPadding(0, dp(12f), 0, dp(6f)); paint.isFakeBoldText = true
         })
@@ -134,14 +145,39 @@ class CardioActivity : AppCompatActivity() {
                     setTextColor(C.text); textSize = 16f; paint.isFakeBoldText = true
                 })
                 row.addView(label(this, "消耗 ${Calc.r0(log.kcal)} kcal　MET ${log.met}"))
+                val trash = TextView(this).apply {
+                    text = "🗑 刪除"
+                    setTextColor(C.danger)
+                    textSize = 13f
+                    setPadding(0, dp(6f), 0, 0)
+                    setOnClickListener { confirmDeleteCardio(log) }
+                }
+                row.addView(trash)
                 row.setOnLongClickListener {
-                    Store.deleteCardio(this, log.day, log.id)
-                    Toast.makeText(this, "已刪除", Toast.LENGTH_SHORT).show()
-                    render(); true
+                    confirmDeleteCardio(log); true
                 }
                 body.addView(row)
             }
-            body.addView(label(this, "長按可刪除　今日有氧合計 ${Calc.r0(Store.cardioKcal(this, Days.today()))} kcal", 12f))
+            body.addView(label(this, "點 🗑 或長按可刪除（可復原）　今日有氧合計 ${Calc.r0(Store.cardioKcal(this, Days.today()))} kcal", 12f))
         }
+    }
+
+    private fun confirmDeleteCardio(log: CardioLog) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("🐷 刪掉這筆運動？")
+            .setMessage("「${log.label} ${log.minutes} 分」會取消今日消耗計算喔～")
+            .setPositiveButton("刪掉") { _, _ ->
+                val payload = LogActions.deleteCardio(this, log.day, log.id)?.let { DeletedPayload.Cardio(it) }
+                render()
+                if (payload != null) {
+                    Snackbar.make(findViewById(android.R.id.content), LogActions.label(payload), Snackbar.LENGTH_LONG)
+                        .setAction("復原") {
+                            LogActions.restore(this, payload)
+                            render()
+                        }.show()
+                }
+            }
+            .setNegativeButton("先留著", null)
+            .show()
     }
 }

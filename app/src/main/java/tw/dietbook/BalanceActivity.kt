@@ -45,6 +45,9 @@ class BalanceActivity : AppCompatActivity() {
         body.addView(secondaryBtn(this, "🐷 每日總結") {
             startActivity(DailySummaryActivity.intent(this, Days.today()))
         })
+        body.addView(secondaryBtn(this, "🗑 紀錄明細（可刪除）") {
+            startActivity(Intent(this, HistoryActivity::class.java))
+        })
 
         val today = card(this)
         today.addView(label(this, "今日尚未入帳的淨值（跨日才定案）", 12f))

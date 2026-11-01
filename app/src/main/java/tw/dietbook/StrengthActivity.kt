@@ -5,6 +5,7 @@ import android.text.InputType
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.google.android.material.snackbar.Snackbar
 import androidx.appcompat.app.AppCompatActivity
 
 class StrengthActivity : AppCompatActivity() {
@@ -154,14 +155,39 @@ class StrengthActivity : AppCompatActivity() {
                     setTextColor(C.text); textSize = 16f; paint.isFakeBoldText = true
                 })
                 row.addView(label(this, "${log.sets} 組・${log.minutes} 分・${Calc.r0(log.kcal)} kcal"))
+                val trash = TextView(this).apply {
+                    text = "🗑 刪除"
+                    setTextColor(C.danger)
+                    textSize = 13f
+                    setPadding(0, dp(6f), 0, 0)
+                    setOnClickListener { confirmDeleteStrength(log) }
+                }
+                row.addView(trash)
                 row.setOnLongClickListener {
-                    Store.deleteStrength(this, log.day, log.id)
-                    Toast.makeText(this, "已刪除", Toast.LENGTH_SHORT).show()
-                    render(); true
+                    confirmDeleteStrength(log); true
                 }
                 body.addView(row)
             }
-            body.addView(label(this, "長按可刪除", 12f))
+            body.addView(label(this, "點 🗑 或長按可刪除（可復原）", 12f))
         }
+    }
+
+    private fun confirmDeleteStrength(log: StrengthLog) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("🐷 刪掉這筆鍛鍊？")
+            .setMessage("「${log.part}・${log.exercise}」真的要刪嗎？")
+            .setPositiveButton("刪掉") { _, _ ->
+                val payload = LogActions.deleteStrength(this, log.day, log.id)?.let { DeletedPayload.Strength(it) }
+                render()
+                if (payload != null) {
+                    Snackbar.make(findViewById(android.R.id.content), LogActions.label(payload), Snackbar.LENGTH_LONG)
+                        .setAction("復原") {
+                            LogActions.restore(this, payload)
+                            render()
+                        }.show()
+                }
+            }
+            .setNegativeButton("先留著", null)
+            .show()
     }
 }

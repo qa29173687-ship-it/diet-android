@@ -41,7 +41,6 @@ import tw.dietbook.PigMood
 import tw.dietbook.PigStats
 import tw.dietbook.PigVitals
 import tw.dietbook.Days
-import tw.dietbook.StatDetail
 import tw.dietbook.StatDetailKind
 
 /** Home v2: top pink daily stats, enlarged center balance, pig + bottom actions. */
@@ -76,8 +75,8 @@ fun HomeScreenV2(
     onBalance: () -> Unit = {},
     onPigReady: (PigMascotView) -> Unit = {},
     onBubble: (String) -> Unit = {},
+    onStatsChanged: () -> Unit = {},
 ) {
-    val context = LocalContext.current
     var sheetKind by remember { mutableStateOf<StatDetailKind?>(null) }
     val (headline, amount) = BankCopy.headline(state.balanceKcal)
     val balColor = Color(BankCopy.color(state.balanceKcal))
@@ -227,14 +226,12 @@ fun HomeScreenV2(
         }
 
         sheetKind?.let { kind ->
-            val day = Days.today()
             StatDetailBottomSheet(
                 kind = kind,
-                intake = if (kind == StatDetailKind.INTAKE) StatDetail.intake(context, day) else null,
-                protein = if (kind == StatDetailKind.PROTEIN) StatDetail.protein(context, day) else null,
-                burn = if (kind == StatDetailKind.BURN) StatDetail.burn(context, day) else null,
-                strength = if (kind == StatDetailKind.STRENGTH) StatDetail.strength(context, day) else null,
+                day = Days.today(),
+                allowEdit = true,
                 onDismiss = { sheetKind = null },
+                onChanged = onStatsChanged,
             )
         }
     }

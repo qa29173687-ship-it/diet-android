@@ -424,6 +424,13 @@ object Store {
             .apply()
     }
 
+    fun hcIgnored(ctx: Context, day: String): Boolean =
+        p(ctx).getBoolean("hcIgnored_$day", false)
+
+    fun setHcIgnored(ctx: Context, day: String, ignored: Boolean) {
+        p(ctx).edit().putBoolean("hcIgnored_$day", ignored).apply()
+    }
+
     fun lastSeenSummaryDay(ctx: Context): String = p(ctx).getString("lastSeenSummaryDay", "") ?: ""
     fun setLastSeenSummaryDay(ctx: Context, day: String) {
         p(ctx).edit().putString("lastSeenSummaryDay", day).apply()

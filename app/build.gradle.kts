@@ -8,8 +8,8 @@ android {
         applicationId = "tw.dietbook"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "2.4.2"
+        versionCode = 13
+        versionName = "2.4.3"
     }
     signingConfigs {
         if (ksProps.isNotEmpty()) create("release") {

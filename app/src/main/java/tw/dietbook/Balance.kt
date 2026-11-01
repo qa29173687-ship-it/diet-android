@@ -19,8 +19,10 @@ object Balance {
         val tdee = Calc.tdee(u.bmr, u.activity)
         val manual = Store.manualBurn(ctx, today)
         val hcBurn = health.activeKcal
-        val active = Calc.effectiveActive(manual, hcBurn)
+        val hcEffective = if (Store.hcIgnored(ctx, today)) null else hcBurn
+        val active = Calc.effectiveActive(manual, hcEffective)
         val burnSource = when {
+            Store.hcIgnored(ctx, today) && manual <= 0.5 -> "hc_ignored"
             manual > 0.5 -> "manual"
             active != null -> "health_connect"
             else -> "tdee"
@@ -64,7 +66,8 @@ object Balance {
                 val (intake, protein) = Store.dayTotals(ctx, day)
                 val tdee = Calc.tdee(u.bmr, u.activity)
                 val manual = Store.manualBurn(ctx, day)
-                val hc = existing?.hcBurn ?: existing?.activeBurn
+                val hcRaw = existing?.hcBurn ?: existing?.activeBurn
+                val hc = if (Store.hcIgnored(ctx, day)) null else hcRaw
                 val active = Calc.effectiveActive(manual, hc)
                 val net = Calc.dayNet(intake, u.bmr, active, tdee)
                 DaySnapshot(
@@ -88,6 +91,59 @@ object Balance {
             d = d.plusDays(1)
         }
         return u
+    }
+
+
+    /**
+     * Recalculate a day's snapshot from current logs.
+     * Today: live net only (profile.balance unchanged).
+     * Past finalized day: adjust profile.balance by (newNet - oldNet).
+     */
+    fun recomputeDay(ctx: Context, day: String): DaySnapshot {
+        val today = Days.today()
+        val u = Store.profile(ctx)
+        val existing = Store.snapshot(ctx, day)
+        val (intake, protein) = Store.dayTotals(ctx, day)
+        val tdee = Calc.tdee(u.bmr, u.activity)
+        val manual = Store.manualBurn(ctx, day)
+        val hcRaw = existing?.hcBurn
+        val hc = if (Store.hcIgnored(ctx, day)) null else hcRaw
+        val active = Calc.effectiveActive(manual, hc)
+        val burnSource = when {
+            Store.hcIgnored(ctx, day) && manual <= 0.5 -> "hc_ignored"
+            manual > 0.5 -> "manual"
+            active != null -> "health_connect"
+            else -> "tdee"
+        }
+        val net = Calc.dayNet(intake, u.bmr, active, tdee)
+        val isPast = day != today && !Days.parse(day).isAfter(Days.parse(today))
+        val wasFinalized = existing?.finalized == true || (
+            isPast && u.lastFinalizedDay.isNotEmpty() &&
+                !Days.parse(day).isAfter(Days.parse(u.lastFinalizedDay))
+        )
+        val snap = DaySnapshot(
+            day = day,
+            intakeKcal = intake,
+            protein = protein,
+            bmr = existing?.bmr ?: u.bmr,
+            activeBurn = active,
+            tdeeFallback = tdee,
+            net = net,
+            steps = existing?.steps,
+            weightKg = existing?.weightKg ?: u.weightKg,
+            finalized = wasFinalized && day != today,
+            manualBurn = manual,
+            hcBurn = hcRaw,
+            burnSource = burnSource,
+        )
+        if (day != today && wasFinalized && existing != null && existing.finalized) {
+            val delta = net - existing.net
+            if (kotlin.math.abs(delta) > 0.01) {
+                adjustBalance(ctx, delta)
+            }
+        }
+        Store.saveSnapshot(ctx, snap)
+        return snap
     }
 
     fun adjustBalance(ctx: Context, delta: Double) {

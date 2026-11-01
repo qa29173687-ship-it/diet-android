@@ -169,6 +169,9 @@ class SettingsActivity : AppCompatActivity() {
             }
         })
 
+        body.addView(secondaryBtn(this, "🗑 紀錄明細（可刪除）") {
+            startActivity(Intent(this, HistoryActivity::class.java))
+        })
         // ---- 崩潰紀錄（診斷輸入／導航閃退）----
         body.addView(label(this, "診斷", 15f, C.text).apply {
             setPadding(0, dp(16f), 0, dp(6f)); paint.isFakeBoldText = true
