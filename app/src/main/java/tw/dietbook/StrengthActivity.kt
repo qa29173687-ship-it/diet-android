@@ -117,13 +117,25 @@ class StrengthActivity : AppCompatActivity() {
                 )
             )
             Store.awardBadge(this, "first_strength")
-            if ((Store.partLevels(this)[selectedPart] ?: 0) >= 2) {
-                Store.awardBadge(this, "part_$selectedPart")
-            }
+            Store.bumpStreak(this)
+            Outfits.maybeUnlockFromStreak(this)
+            val lvl = Store.partLevels(this)[selectedPart] ?: 0
+            if (lvl >= 2) Store.awardBadge(this, "part_$selectedPart")
             val streak = Store.profile(this).streakDays
-            Praise.show(this, Praise.strengthLine(selectedPart, streak), R.drawable.pig_buff) {
-                finish()
+            val maxed = lvl >= 3 && selectedPart !in Store.posedParts(this)
+            Sfx.pour(this)
+            fun afterPour() {
+                fun afterPose() {
+                    Praise.show(this, Praise.strengthLine(selectedPart, streak), R.drawable.pig_buff) {
+                        finish()
+                    }
+                }
+                if (maxed) {
+                    Store.markPosedPart(this, selectedPart)
+                    CuteFx.play(this, CuteScene.POSING, label = "${selectedPart}滿等！小豬上台秀一下～") { afterPose() }
+                } else afterPose()
             }
+            CuteFx.play(this, CuteScene.HANDS_POUR, kcal = kcal.coerceAtLeast(0.0)) { afterPour() }
         })
 
         body.addView(label(this, "今日鍛鍊", 15f, C.text).apply {

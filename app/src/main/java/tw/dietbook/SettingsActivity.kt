@@ -105,7 +105,26 @@ class SettingsActivity : AppCompatActivity() {
         remindGroup.addView(RadioButton(this).apply { text = "關閉提醒"; id = 2; setTextColor(C.text); isChecked = !u0.remindPayback })
         body.addView(label(this, "存錢筒提醒")); body.addView(remindGroup)
 
+        // ---- 小豬與音效 ----
+        body.addView(label(this, "小豬互動", 15f, C.text).apply {
+            setPadding(0, dp(16f), 0, dp(6f)); paint.isFakeBoldText = true
+        })
+        val muteGroup = RadioGroup(this)
+        muteGroup.addView(RadioButton(this).apply {
+            text = "開啟軟萌音效"; id = 1; setTextColor(C.text); isChecked = !Store.sfxMuted(this@SettingsActivity)
+        })
+        muteGroup.addView(RadioButton(this).apply {
+            text = "靜音"; id = 2; setTextColor(C.text); isChecked = Store.sfxMuted(this@SettingsActivity)
+        })
+        body.addView(label(this, "音效（可隨時靜音）")); body.addView(muteGroup)
+        muteGroup.setOnCheckedChangeListener { _, id ->
+            Store.setSfxMuted(this@SettingsActivity, id == 2)
+            Toast.makeText(this@SettingsActivity, if (id == 2) "已靜音" else "音效開啟", Toast.LENGTH_SHORT).show()
+        }
+        body.addView(label(this, "衣櫃可在首頁「衣櫃」換裝；連續 7 天解鎖運動服／圍兜／廚師帽。天氣與節日會自動換裝（可拒定位）。", 12f, C.muted))
+
         // ---- 資料版本 ----
+
         body.addView(label(this, "營養資料庫", 15f, C.text).apply {
             setPadding(0, dp(16f), 0, dp(6f)); paint.isFakeBoldText = true
         })

@@ -50,6 +50,8 @@ class LogActivity : AppCompatActivity() {
                 Toast.makeText(this, "請輸入有效公克數", Toast.LENGTH_SHORT).show(); return@primaryBtn
             }
             val day = Days.today()
+            val kcal = Calc.scale(food.kcalPer100, g)
+            val protein = Calc.scale(food.proteinPer100, g)
             Store.addLog(
                 this,
                 FoodLog(
@@ -58,12 +60,27 @@ class LogActivity : AppCompatActivity() {
                     foodId = food.id,
                     foodName = food.name,
                     grams = g,
-                    kcal = Calc.scale(food.kcalPer100, g),
-                    protein = Calc.scale(food.proteinPer100, g),
+                    kcal = kcal,
+                    protein = protein,
                     at = System.currentTimeMillis(),
                 )
             )
-            Toast.makeText(this, "已加入", Toast.LENGTH_SHORT).show()
+            Store.touchFeed(this)
+            Store.bumpStreak(this)
+            Outfits.maybeUnlockFromStreak(this)
+            // C: food drop → catch/chew；過量 → 好撐；蛋白質達標 → 牛奶火焰
+            CuteFx.queue(this, PendingCute(CuteScene.FOOD_CATCH, kcal = kcal, label = "好好吃～ ${food.name}"))
+            val u = Store.profile(this)
+            val (_, dayProtein) = Store.dayTotals(this, day)
+            if (dayProtein >= u.goalProtein && u.goalProtein > 0) {
+                CuteFx.queue(this, PendingCute(CuteScene.PROTEIN_POWER, protein = dayProtein))
+            }
+            // rough surplus: today's intake already high vs goal
+            val (dayKcal, _) = Store.dayTotals(this, day)
+            if (dayKcal > u.goalKcal * 1.15 && u.goalKcal > 0) {
+                CuteFx.queue(this, PendingCute(CuteScene.SURPLUS_BELLY, kcal = dayKcal))
+            }
+            Toast.makeText(this, "已加入，回家看小豬吃飯～", Toast.LENGTH_SHORT).show()
             finish()
         })
     }

@@ -148,4 +148,32 @@ class PreviewTest {
         shot(setup, "7-首次設定")
         setup.finish()
     }
+
+    @Test
+    fun cuteAnimationFrames() {
+        val c = RuntimeEnvironment.getApplication()
+        Store.saveProfile(c, baseProfile(-8000.0).copy(streakDays = 8, badges = setOf("streak7", "wardrobe7")))
+        Store.setUnlockedOutfits(c, setOf(OutfitId.SPORTS, OutfitId.BIB, OutfitId.CHEF))
+        Store.setSelectedOutfit(c, OutfitId.SPORTS)
+        Store.setWeather(c, WeatherSnap(code = 61, tempC = 22.0, at = System.currentTimeMillis()))
+        val scenes = listOf(
+            CuteScene.BMR_COIN to "8-金幣入帳",
+            CuteScene.HANDS_POUR to "9-運動倒幣",
+            CuteScene.FOOD_CATCH to "10-吃飯接住",
+            CuteScene.PROTEIN_POWER to "11-蛋白質達標",
+            CuteScene.SURPLUS_BELLY to "12-好撐",
+            CuteScene.FIREWORKS_KG to "13-減重煙火",
+            CuteScene.POSING to "14-上台秀",
+            CuteScene.MORNING to "15-早安",
+        )
+        scenes.forEach { (sc, name) ->
+            val b = CuteFx.capture(c, sc, 0.55f, label = "預覽")
+            File(out, "$name.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        // main with sports + lonely-ish
+        val a = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        shot(a, "16-主畫面-運動服")
+        a.finish()
+    }
+
 }

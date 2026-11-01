@@ -386,4 +386,113 @@ object Store {
         lastUpdated?.let { e.putLong("data_last_updated", it) }
         e.apply()
     }
+
+    // —— v2.2 cute prefs ——
+    fun sfxMuted(ctx: Context): Boolean = p(ctx).getBoolean("sfxMuted", false)
+    fun setSfxMuted(ctx: Context, v: Boolean) { p(ctx).edit().putBoolean("sfxMuted", v).apply() }
+
+    fun selectedOutfit(ctx: Context): OutfitId {
+        val raw = p(ctx).getString("outfitSelected", OutfitId.NONE.name) ?: OutfitId.NONE.name
+        return runCatching { OutfitId.valueOf(raw) }.getOrDefault(OutfitId.NONE)
+    }
+    fun setSelectedOutfit(ctx: Context, id: OutfitId) {
+        p(ctx).edit().putString("outfitSelected", id.name).apply()
+    }
+    fun unlockedOutfits(ctx: Context): Set<OutfitId> {
+        val raw = p(ctx).getString("outfitsUnlocked", "") ?: ""
+        return raw.split(',').mapNotNull { s ->
+            val n = s.trim(); if (n.isEmpty()) null else runCatching { OutfitId.valueOf(n) }.getOrNull()
+        }.toSet()
+    }
+    fun setUnlockedOutfits(ctx: Context, set: Set<OutfitId>) {
+        p(ctx).edit().putString("outfitsUnlocked", set.joinToString(",") { it.name }).apply()
+    }
+
+    fun weather(ctx: Context): WeatherSnap {
+        val s = p(ctx)
+        return WeatherSnap(
+            code = s.getInt("wxCode", -1),
+            tempC = s.getFloat("wxTemp", Float.NaN).toDouble(),
+            at = s.getLong("wxAt", 0L),
+        )
+    }
+    fun setWeather(ctx: Context, w: WeatherSnap) {
+        p(ctx).edit()
+            .putInt("wxCode", w.code)
+            .putFloat("wxTemp", w.tempC.toFloat())
+            .putLong("wxAt", w.at)
+            .apply()
+    }
+
+    fun lastBmrCoinDay(ctx: Context): String = p(ctx).getString("lastBmrCoinDay", "") ?: ""
+    fun setLastBmrCoinDay(ctx: Context, day: String) {
+        p(ctx).edit().putString("lastBmrCoinDay", day).apply()
+    }
+
+    fun deficitKgCelebrated(ctx: Context): Int = p(ctx).getInt("deficitKgCelebrated", 0)
+    fun setDeficitKgCelebrated(ctx: Context, n: Int) {
+        p(ctx).edit().putInt("deficitKgCelebrated", n).apply()
+    }
+
+    fun lastOpenDay(ctx: Context): String = p(ctx).getString("lastOpenDay", "") ?: ""
+    fun setLastOpenDay(ctx: Context, day: String) {
+        p(ctx).edit().putString("lastOpenDay", day).apply()
+    }
+
+    fun lastAwayMs(ctx: Context): Long = p(ctx).getLong("lastAwayMs", 0L)
+    fun setLastAwayMs(ctx: Context, ms: Long) {
+        p(ctx).edit().putLong("lastAwayMs", ms).apply()
+    }
+
+    fun lastInteractMs(ctx: Context): Long = p(ctx).getLong("lastInteractMs", 0L)
+    fun setLastInteractMs(ctx: Context, ms: Long) {
+        p(ctx).edit().putLong("lastInteractMs", ms).apply()
+    }
+
+    fun posedParts(ctx: Context): Set<String> {
+        val raw = p(ctx).getString("posedParts", "") ?: ""
+        return raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    }
+    fun markPosedPart(ctx: Context, part: String) {
+        val set = posedParts(ctx).toMutableSet()
+        set += part
+        p(ctx).edit().putString("posedParts", set.joinToString(",")).apply()
+    }
+
+    fun queueCute(ctx: Context, pending: PendingCute) {
+        val arr = JSONArray(p(ctx).getString("cuteQueue", "[]") ?: "[]")
+        arr.put(JSONObject().apply {
+            put("scene", pending.scene.name)
+            put("kcal", pending.kcal)
+            put("protein", pending.protein)
+            put("label", pending.label)
+        })
+        p(ctx).edit().putString("cuteQueue", arr.toString()).apply()
+    }
+    fun peekCute(ctx: Context): PendingCute? {
+        val arr = JSONArray(p(ctx).getString("cuteQueue", "[]") ?: "[]")
+        if (arr.length() == 0) return null
+        val o = arr.getJSONObject(0)
+        return PendingCute(
+            scene = CuteScene.valueOf(o.getString("scene")),
+            kcal = o.optDouble("kcal", 0.0),
+            protein = o.optDouble("protein", 0.0),
+            label = o.optString("label", ""),
+        )
+    }
+    fun popCute(ctx: Context): PendingCute? {
+        val arr = JSONArray(p(ctx).getString("cuteQueue", "[]") ?: "[]")
+        if (arr.length() == 0) return null
+        val o = arr.getJSONObject(0)
+        val next = JSONArray()
+        for (i in 1 until arr.length()) next.put(arr.get(i))
+        p(ctx).edit().putString("cuteQueue", next.toString()).apply()
+        return PendingCute(
+            scene = CuteScene.valueOf(o.getString("scene")),
+            kcal = o.optDouble("kcal", 0.0),
+            protein = o.optDouble("protein", 0.0),
+            label = o.optString("label", ""),
+        )
+    }
+
 }

@@ -73,4 +73,16 @@ class LogicTest {
         assertTrue(Praise.strengthLine("手臂", 5).isNotBlank())
         assertTrue(Praise.strengthLine("腹", 0).isNotBlank())
     }
+
+    @Test
+    fun outfitsHolidayAndWeather() {
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Taipei"))
+        cal.set(2026, 11, 24) // Dec 24
+        assertEquals(OutfitId.SANTA, Outfits.holidayOutfit(cal))
+        assertEquals(OutfitId.UMBRELLA, Outfits.weatherOutfit(WeatherSnap(61, 20.0, 1L)))
+        assertEquals(OutfitId.ICE_CREAM, Outfits.weatherOutfit(WeatherSnap(0, 33.0, 1L)))
+        val kg = kotlin.math.floor(8000.0 / 7700.0).toInt()
+        assertEquals(1, kg)
+    }
+
 }
